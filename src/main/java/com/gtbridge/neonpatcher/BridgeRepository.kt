@@ -77,6 +77,8 @@ internal enum class PatchStage(val title: String) {
 
 internal data class PatchReport(val version: BridgeVersion, val changes: List<String>, val colorInstructions: Int)
 
+internal class MissingAppliedProfile : IOException()
+
 internal class BridgeRepository(private val context: Context) {
     private val manager = context.packageManager
     private val signatureFlags =
@@ -102,6 +104,7 @@ internal class BridgeRepository(private val context: Context) {
     fun patch(
         source: BridgeSource,
         profile: BridgeProfile,
+        replacedClone: PackageInfo? = null,
         progress: (PatchStage) -> Unit
     ): PatchReport {
         val display = profile.display
@@ -143,6 +146,9 @@ internal class BridgeRepository(private val context: Context) {
                 }
             }
             val origin = checkOriginal(archive(original, signatureFlags))
+            if (replacedClone != null && origin.longVersionCode <= replacedClone.longVersionCode) {
+                throw IOException("Wähle eine Original-APK, die neuer als die installierte GT Mod Bridge ist.")
+            }
 
             progress(PatchStage.Patch)
             val helperDex = if (display.hideStatusBar || display.holdSettings || display.customOrder
@@ -161,7 +167,8 @@ internal class BridgeRepository(private val context: Context) {
             val colorInstructions = BridgeNeonBuild.patch(original.toPath(), unsigned.toPath(),
                 replacements, helperDex, display.hideStatusBar, display.compactNavigation, display.hideReadingsPopup,
                 profile.onlineMask, display.cockpitText.percent, display.hiddenReadings, display.escFirst,
-                display.holdSettings, grid, display.tripleTapEnabled, display.keepPageOnResize)
+                display.holdSettings, grid, display.tripleTapEnabled, display.keepPageOnResize,
+                profile.encode().toByteArray(Charsets.UTF_8))
 
             progress(PatchStage.Sign)
             try {
@@ -173,6 +180,13 @@ internal class BridgeRepository(private val context: Context) {
             if (copy?.packageName != CLONE || copy.longVersionCode != origin.longVersionCode) {
                 throw IOException("Die erzeugte APK ist ungültig.")
             }
+            if (replacedClone != null) {
+                val installedSigner = replacedClone.signingInfo?.apkContentsSigners?.singleOrNull()
+                val newSigner = copy.signingInfo?.apkContentsSigners?.singleOrNull()
+                if (newSigner == null || installedSigner != newSigner) {
+                    throw IOException("Die Signatur passt nicht zur installierten GT Mod Bridge. Das Update wurde abgebrochen.")
+                }
+            }
             Files.move(signed.toPath(), result.toPath(), REPLACE_EXISTING, ATOMIC_MOVE)
             return PatchReport(copy.toVersion(), profile.summary, colorInstructions)
         } finally {
@@ -181,6 +195,27 @@ internal class BridgeRepository(private val context: Context) {
             Files.deleteIfExists(signed.toPath())
             Files.deleteIfExists(scratch.toPath())
         }
+    }
+
+    fun updateClone(source: BridgeSource, fallback: BridgeProfile?, progress: (PatchStage) -> Unit): PatchReport {
+        val clone = try {
+            manager.getPackageInfo(CLONE, signatureFlags)
+        } catch (_: PackageManager.NameNotFoundException) {
+            throw IOException("GT Mod Bridge ist nicht installiert.")
+        }
+        val installedApk = clone.applicationInfo?.sourceDir ?: throw IOException("Installierte APK wurde nicht gefunden.")
+        val applied = java.util.zip.ZipFile(installedApk).use { zip ->
+            zip.getEntry(BridgeNeonBuild.PATCH_PROFILE)?.let { entry ->
+                val bytes = zip.getInputStream(entry).use { it.readNBytes(16_385) }
+                if (bytes.size > 16_384) throw IOException("Das Mod-Profil in der installierten APK ist zu groß.")
+                try {
+                    BridgeProfile.decode(bytes.toString(Charsets.UTF_8))
+                } catch (failure: Exception) {
+                    throw IOException("Das Mod-Profil in der installierten APK kann nicht gelesen werden.", failure)
+                }
+            }
+        } ?: fallback ?: throw MissingAppliedProfile()
+        return patch(source, applied, clone, progress)
     }
 
     fun readProfile(uri: Uri): BridgeProfile {

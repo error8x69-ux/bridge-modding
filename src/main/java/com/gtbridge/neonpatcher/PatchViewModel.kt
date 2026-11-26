@@ -59,6 +59,8 @@ internal fun normalizedHex(input: String): String? =
 internal enum class MessageType { Info, Success, Error }
 internal data class PatchMessage(val text: String, val type: MessageType)
 
+internal data class CloneUpdateRequest(val source: BridgeSource, val profile: BridgeProfile)
+
 internal data class PatchState(
     val palette: BridgePalette,
     val display: BridgeDisplayOptions = BridgeDisplayOptions(),
@@ -69,6 +71,8 @@ internal data class PatchState(
     val output: BridgeVersion? = null,
     val report: PatchReport? = null,
     val pendingImport: BridgeProfile? = null,
+    val pendingLegacyUpdate: CloneUpdateRequest? = null,
+    val installCloneRequest: Boolean = false,
     val update: BridgeRelease? = null,
     val preparedUpdate: BridgeVersion? = null,
     val updateChecked: Boolean = false,
@@ -208,11 +212,9 @@ internal class PatchViewModel(application: Application) : AndroidViewModel(appli
         }
     }
 
-    fun patch(useInstalled: Boolean = false) {
-        val current = model.value
-        val snapshot = if (useInstalled) current.copy(source = BridgeSource.Installed) else current
+    fun patch() {
+        val snapshot = model.value
         if (snapshot.stage != null || !snapshot.sourceAvailable) return
-        if (useInstalled) selectInstalled()
         launchWork(PatchStage.Validate) {
             val report = withContext(Dispatchers.IO) {
                 repository.patch(snapshot.source, snapshot.profile) { stage ->
@@ -221,6 +223,38 @@ internal class PatchViewModel(application: Application) : AndroidViewModel(appli
             }
             model.update { it.copy(output = report.version, report = report,
                 message = PatchMessage("APK erstellt und signiert.", MessageType.Success)) }
+        }
+    }
+
+    fun updateClone() {
+        val snapshot = model.value
+        if (snapshot.installed == null || !snapshot.sourceAvailable) return
+        buildCloneUpdate(CloneUpdateRequest(snapshot.source, snapshot.profile), false)
+    }
+
+    fun acceptLegacyUpdate() {
+        val request = model.value.pendingLegacyUpdate ?: return
+        dismissLegacyUpdate()
+        buildCloneUpdate(request, true)
+    }
+
+    fun dismissLegacyUpdate() = model.update { it.copy(pendingLegacyUpdate = null) }
+
+    fun consumeCloneInstallRequest() = model.update { it.copy(installCloneRequest = false) }
+
+    private fun buildCloneUpdate(request: CloneUpdateRequest, useCurrentProfile: Boolean) {
+        launchWork(PatchStage.Validate) {
+            val report = try {
+                withContext(Dispatchers.IO) {
+                    repository.updateClone(request.source, request.profile.takeIf { useCurrentProfile }) { stage ->
+                        model.update { it.copy(stage = stage) }
+                    }
+                }
+            } catch (_: MissingAppliedProfile) {
+                model.update { it.copy(pendingLegacyUpdate = request) }
+                return@launchWork
+            }
+            model.update { it.copy(output = report.version, report = report, installCloneRequest = true) }
         }
     }
 

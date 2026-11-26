@@ -45,7 +45,10 @@ internal data class ApkActions(
     val changeDisplay: (BridgeDisplayOptions) -> Unit,
     val changeOnline: (OnlineOption, Boolean) -> Unit,
     val blockAnalyticsAndRanking: () -> Unit,
-    val patch: (Boolean) -> Unit,
+    val patch: () -> Unit,
+    val updateClone: () -> Unit,
+    val acceptLegacyUpdate: () -> Unit,
+    val dismissLegacyUpdate: () -> Unit,
     val install: () -> Unit,
     val checkForUpdate: () -> Unit,
     val downloadUpdate: () -> Unit,
@@ -110,9 +113,15 @@ internal fun ApkScreen(state: PatchState, actions: ApkActions, modifier: Modifie
                 Text(if (document == null) "Original-APK auswählen" else "Andere APK auswählen")
             }
         }
-        if (state.originalNewer) {
-            FilledTonalButton({ actions.patch(true) }, enabled = idle, modifier = Modifier.fillMaxWidth()) {
-                Text("Neueres Original mit diesen Einstellungen patchen")
+        if (state.installed != null) {
+            FilledTonalButton(actions.updateClone,
+                enabled = idle && (state.originalNewer || state.source is BridgeSource.Document),
+                modifier = Modifier.fillMaxWidth()) {
+                Text("GT Mod Bridge mit Mods aktualisieren")
+            }
+            if (!state.originalNewer && state.source !is BridgeSource.Document) {
+                Text("Dafür brauchst du eine neuere installierte Original-App oder eine neuere Original-APK.",
+                    style = MaterialTheme.typography.bodySmall)
             }
         }
         Panel {
@@ -149,7 +158,7 @@ internal fun ApkScreen(state: PatchState, actions: ApkActions, modifier: Modifie
             Text("Für diese APK", style = MaterialTheme.typography.titleMedium)
             ProfileOverview(state.profile, compact = true)
         }
-        Button({ actions.patch(false) }, enabled = idle && state.sourceAvailable, modifier = Modifier.fillMaxWidth()) {
+        Button(actions.patch, enabled = idle && state.sourceAvailable, modifier = Modifier.fillMaxWidth()) {
             Icon(Icons.Default.Build, contentDescription = null, Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
             Text("APK erstellen", Modifier.padding(vertical = 6.dp))

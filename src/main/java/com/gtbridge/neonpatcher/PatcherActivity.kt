@@ -12,6 +12,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 class PatcherActivity : ComponentActivity() {
@@ -57,6 +58,12 @@ class PatcherActivity : ComponentActivity() {
             SystemBarStyle.dark(android.graphics.Color.BLACK))
         setContent {
             val state by model.state.collectAsStateWithLifecycle()
+            LaunchedEffect(state.installCloneRequest, state.stage) {
+                if (state.installCloneRequest && state.stage == null) {
+                    model.consumeCloneInstallRequest()
+                    installApk(false)
+                }
+            }
             BridgeTheme {
                 BridgeApp(state, model::choosePreset, model::changeColor,
                     ApkActions(
@@ -66,6 +73,9 @@ class PatcherActivity : ComponentActivity() {
                         changeOnline = model::changeOnline,
                         blockAnalyticsAndRanking = model::blockAnalyticsAndRanking,
                         patch = model::patch,
+                        updateClone = model::updateClone,
+                        acceptLegacyUpdate = model::acceptLegacyUpdate,
+                        dismissLegacyUpdate = model::dismissLegacyUpdate,
                         install = { installApk(false) },
                         checkForUpdate = model::checkForUpdate,
                         downloadUpdate = model::downloadUpdate,

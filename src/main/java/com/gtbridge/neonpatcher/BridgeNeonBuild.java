@@ -25,6 +25,7 @@ final class BridgeNeonBuild {
     private static final String ORIGINAL_FACTORY = "androidx.core.app.CoreComponentFactory";
     private static final String STATUS_FACTORY = "com.gtbridge.CloneStatusFactory";
     private static final String HELPER_OPTIONS = "assets/bridge-modding/options.bin";
+    static final String PATCH_PROFILE = "assets/bridge-modding/applied-profile.json";
 
     static Map<Integer, Integer> palette(int background, int text, int accent) {
         return Map.ofEntries(
@@ -57,13 +58,14 @@ final class BridgeNeonBuild {
     }
 
     static int patch(Path source, Path output, Map<Integer, Integer> colors) throws Exception {
-        return patch(source, output, colors, null, false, false, false, 0, 100, 0, false, false, null, false, false);
+        return patch(source, output, colors, null, false, false, false, 0, 100, 0, false, false, null, false, false, null);
     }
 
     static int patch(Path source, Path output, Map<Integer, Integer> colors,
                      byte[] helperDex, boolean hideStatusBar, boolean compactNavigation, boolean hideReadingsPopup,
                      int onlineMask, int cockpitTextPercent, int hiddenReadings, boolean escFirst,
-                     boolean holdSettings, CockpitGrid grid, boolean restrictedTripleTap, boolean keepPageOnResize)
+                     boolean holdSettings, CockpitGrid grid, boolean restrictedTripleTap, boolean keepPageOnResize,
+                     byte[] appliedProfile)
             throws Exception {
         int dexColors = 0;
         int themeColors = 0;
@@ -86,6 +88,9 @@ final class BridgeNeonBuild {
             while (entries.hasMoreElements()) {
                 ZipEntry entry = entries.nextElement();
                 String name = entry.getName();
+                if (appliedProfile != null && name.equals(PATCH_PROFILE)) {
+                    throw new IOException("Die Quell-APK enthält bereits ein Mod-Profil.");
+                }
                 if (helperDex != null && name.equals(HELPER_OPTIONS)) {
                     throw new IOException("Die APK enthält bereits eine Cockpit-App-Komponente.");
                 }
@@ -127,6 +132,11 @@ final class BridgeNeonBuild {
                     patchTypedColors(data, colors);
                 }
                 writeEntry(zip, counter, entry, data);
+            }
+            if (appliedProfile != null) {
+                var profile = new ZipEntry(PATCH_PROFILE);
+                profile.setMethod(ZipEntry.DEFLATED);
+                writeEntry(zip, counter, profile, appliedProfile);
             }
             if (helperDex != null) {
                 var helper = new ZipEntry("classes" + (dexNumber + 1) + ".dex");

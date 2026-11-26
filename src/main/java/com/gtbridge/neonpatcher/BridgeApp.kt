@@ -20,6 +20,8 @@ import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -54,6 +56,17 @@ internal fun BridgeApp(
 ) {
     state.pendingImport?.let {
         ProfileImportDialog(it, state.stage == null, actions.acceptImport, actions.dismissImport)
+    }
+    if (state.pendingLegacyUpdate != null) {
+        AlertDialog(
+            onDismissRequest = actions.dismissLegacyUpdate,
+            title = { Text("Aktuelle Mod-Auswahl übernehmen?") },
+            text = { Text("Diese ältere Kopie enthält kein gespeichertes Mod-Profil. Für das Update kannst du die aktuelle Auswahl aus Bridge Modding übernehmen.") },
+            confirmButton = { TextButton(actions.acceptLegacyUpdate, enabled = state.stage == null) {
+                Text("Aktuelle Auswahl übernehmen")
+            } },
+            dismissButton = { TextButton(actions.dismissLegacyUpdate) { Text("Abbrechen") } }
+        )
     }
     var section by rememberSaveable { mutableStateOf(Section.Design) }
     val screenState = rememberSaveableStateHolder()
