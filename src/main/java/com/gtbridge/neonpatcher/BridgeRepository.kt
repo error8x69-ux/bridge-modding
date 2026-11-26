@@ -41,7 +41,7 @@ internal data class BridgeDisplayOptions(
     val customOrder: Boolean = false,
     val readingOrder: List<CockpitReading> = defaultReadingOrder,
     val restrictedTripleTap: Boolean = false,
-    val keepCockpitOnResize: Boolean = false
+    val keepPageOnResize: Boolean = false
 ) {
     fun shows(reading: CockpitReading) = !reading.hiddenIn(hiddenReadings)
 
@@ -161,7 +161,7 @@ internal class BridgeRepository(private val context: Context) {
             val colorInstructions = BridgeNeonBuild.patch(original.toPath(), unsigned.toPath(),
                 replacements, helperDex, display.hideStatusBar, display.compactNavigation, display.hideReadingsPopup,
                 profile.onlineMask, display.cockpitText.percent, display.hiddenReadings, display.escFirst,
-                display.holdSettings, grid, display.tripleTapEnabled, display.keepCockpitOnResize)
+                display.holdSettings, grid, display.tripleTapEnabled, display.keepPageOnResize)
 
             progress(PatchStage.Sign)
             try {

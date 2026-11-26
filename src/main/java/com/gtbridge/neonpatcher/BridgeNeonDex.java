@@ -32,7 +32,7 @@ final class BridgeNeonDex {
     int patchColors(Map<Integer, Integer> colors, DisplayPatch display) throws IOException {
         boolean recolor = !colors.isEmpty();
         if (!recolor && !display.hideStatusBar && !display.compactNavigation
-                && !display.hideReadingsPopup && display.onlineMask == 0
+                && !display.hideReadingsPopup && !display.keepPageOnResize && display.onlineMask == 0
                 && display.cockpitTextPercent == 100 && display.hiddenReadings == 0 && !display.escFirst) {
             return 0;
         }
@@ -333,6 +333,17 @@ final class BridgeNeonDex {
         options.applied |= DisplayPatch.TRIP_TARGET;
     }
 
+    private void keepPageOnResize(int code, DisplayPatch display) throws IOException {
+        if (!invokesAt(code, 0, 0x206f, 0x0010, "Landroid/app/Activity;", "onConfigurationChanged")
+                || !invokesAt(code, 3, 0x1070, 0x0000, MAIN_ACTIVITY, "renderCurrentPage")
+                || u16(instructionOffset(code, 6, 1)) != 0x000e) {
+            throw unsupportedCockpit("Aktuelle Seite beim Bildschirmwechsel behalten");
+        }
+        // Android still dispatches the configuration to the existing view hierarchy.
+        eraseInvoke(code + 16 + 3 * 2);
+        display.applied |= DisplayPatch.KEEP_PAGE;
+    }
+
     private void eraseInvoke(int offset) {
         for (int word = 0; word < 3; word++) writeShort(offset + 2 * word, 0);
     }
@@ -466,6 +477,9 @@ final class BridgeNeonDex {
 
     private void patchDisplay(int code, String owner, String name, DisplayPatch display)
             throws IOException {
+        if (display.keepPageOnResize && MAIN_ACTIVITY.equals(owner) && "onconfigurationchanged".equals(name)) {
+            keepPageOnResize(code, display);
+        }
         if (MAIN_ACTIVITY.equals(owner) && display.hideStatusBar && "oncreate".equals(name)) {
             int addFlags = instructionOffset(code, 0x008e, 3);
             int method = methods + 8 * u16(addFlags + 2);
@@ -558,6 +572,7 @@ final class BridgeNeonDex {
         static final int RESTRICTED_MAPPING = 16384;
         static final int RESTRICTED_ACTION = 32768;
         static final int INSTRUMENT_TAP = 65536;
+        static final int KEEP_PAGE = 131072;
 
         final boolean hideStatusBar;
         final boolean compactNavigation;
@@ -570,13 +585,15 @@ final class BridgeNeonDex {
         final boolean customGrid;
         final boolean tripTargetHidden;
         final boolean restrictedTripleTap;
+        final boolean keepPageOnResize;
         int appliedReadings;
         int applied;
         int onlineApplied;
 
         DisplayPatch(boolean hideStatusBar, boolean compactNavigation, boolean hideReadingsPopup,
                      int onlineMask, int cockpitTextPercent, int hiddenReadings, boolean escFirst,
-                     boolean holdSettings, boolean customGrid, boolean restrictedTripleTap) {
+                     boolean holdSettings, boolean customGrid, boolean restrictedTripleTap,
+                     boolean keepPageOnResize) {
             this.hideStatusBar = hideStatusBar;
             this.compactNavigation = compactNavigation;
             this.hideReadingsPopup = hideReadingsPopup;
@@ -587,6 +604,7 @@ final class BridgeNeonDex {
             this.holdSettings = holdSettings;
             this.customGrid = customGrid;
             this.restrictedTripleTap = restrictedTripleTap;
+            this.keepPageOnResize = keepPageOnResize;
             tripTargetHidden = TRIP.hiddenIn(hiddenReadings) && CONSUMPTION.hiddenIn(hiddenReadings);
         }
 
@@ -595,6 +613,9 @@ final class BridgeNeonDex {
         }
 
         void verify() throws IOException {
+            if (keepPageOnResize && (applied & KEEP_PAGE) == 0) {
+                throw unsupportedCockpit("Aktuelle Seite beim Bildschirmwechsel behalten");
+            }
             int required = (hideStatusBar ? STATUS_BAR : 0)
                 | (compactNavigation ? WORKSPACE_NAV | LEGACY_NAV_ITEM | LEGACY_NAV_ROW : 0)
                 | (hideReadingsPopup ? READINGS_POPUP | INSTRUMENT_TAP : 0);

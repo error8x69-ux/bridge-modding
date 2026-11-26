@@ -116,6 +116,15 @@ internal fun ApkScreen(state: PatchState, actions: ApkActions, modifier: Modifie
             }
         }
         Panel {
+            Text("Verhalten der GT-Mod-Bridge-Kopie", style = MaterialTheme.typography.titleMedium)
+            DisplaySwitch("Aktuelle Seite beim Bildschirmwechsel behalten",
+                state.display.keepPageOnResize, idle) {
+                actions.changeDisplay(state.display.copy(keepPageOnResize = it))
+            }
+            Text("Gilt auch für geöffnete Einstellungen beim Falten, Drehen und Ändern der Fenstergröße.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Panel {
             Text("Online-Funktionen in der Kopie", style = MaterialTheme.typography.titleMedium)
             TextButton(onClick = actions.blockAnalyticsAndRanking,
                 enabled = idle && !state.blocked.containsAll(privateOnlineOptions)) {

@@ -63,7 +63,7 @@ final class BridgeNeonBuild {
     static int patch(Path source, Path output, Map<Integer, Integer> colors,
                      byte[] helperDex, boolean hideStatusBar, boolean compactNavigation, boolean hideReadingsPopup,
                      int onlineMask, int cockpitTextPercent, int hiddenReadings, boolean escFirst,
-                     boolean holdSettings, CockpitGrid grid, boolean restrictedTripleTap, boolean keepCockpitOnResize)
+                     boolean holdSettings, CockpitGrid grid, boolean restrictedTripleTap, boolean keepPageOnResize)
             throws Exception {
         int dexColors = 0;
         int themeColors = 0;
@@ -72,7 +72,7 @@ final class BridgeNeonBuild {
         int dexNumber = 0;
         var display = new BridgeNeonDex.DisplayPatch(hideStatusBar, compactNavigation, hideReadingsPopup || holdSettings,
             onlineMask, cockpitTextPercent, hiddenReadings, escFirst && grid == null, holdSettings, grid != null,
-            restrictedTripleTap);
+            restrictedTripleTap, keepPageOnResize);
         if (restrictedTripleTap && !display.hideReadingsPopup) {
             throw new IOException("Der Dreifachtipp setzt den Tippschutz voraus.");
         }
@@ -114,7 +114,7 @@ final class BridgeNeonBuild {
                     labelCount += renameResourceString(data, ORIGINAL_LABEL, CLONE_LABEL);
                     if (name.equals("AndroidManifest.xml")) {
                         manifestCount++;
-                        if (keepCockpitOnResize) data = keepCockpitActivities(data);
+                        if (keepPageOnResize) data = keepBridgeActivities(data);
                         if (helperDex != null && renameResourceString(data, ORIGINAL_FACTORY, STATUS_FACTORY) != 1) {
                             throw new IOException("Diese Bridge-Version unterstützt die gewählte Cockpit-App-Komponente nicht.");
                         }
@@ -151,7 +151,7 @@ final class BridgeNeonBuild {
         return dexColors;
     }
 
-    private static byte[] keepCockpitActivities(byte[] data) throws IOException {
+    private static byte[] keepBridgeActivities(byte[] data) throws IOException {
         final int configResource = 0x0101001f;
         // orientation, screenLayout, screenSize, smallestScreenSize and density.
         final int sizeChanges = 0x1d80;
@@ -223,7 +223,7 @@ final class BridgeNeonBuild {
             }
             chunk = end;
         }
-        if (patched == 0) throw new IOException("Cockpit-Aktivität im Original-Manifest nicht gefunden.");
+        if (patched == 0) throw new IOException("Bridge-Aktivität im Original-Manifest nicht gefunden.");
         return data;
     }
 

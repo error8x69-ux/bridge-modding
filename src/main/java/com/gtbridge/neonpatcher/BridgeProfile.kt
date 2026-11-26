@@ -36,7 +36,7 @@ internal data class BridgeProfile(
         if (display.customOrder) add("Cockpit-Raster · " + display.visibleOrderedReadings
             .joinToString { it.tileLabel }.ifEmpty { "keine Zusatzwerte" })
         if (display.holdSettings) add("Einstellungen per langem Druck öffnen")
-        if (display.keepCockpitOnResize) add("Cockpit beim Bildschirmwechsel offen halten")
+        if (display.keepPageOnResize) add("Aktuelle Seite beim Bildschirmwechsel behalten")
         if (display.tripleTapEnabled) add("Dreifachtipp lädt das gedrosselte Profil")
     }
 
@@ -56,7 +56,7 @@ internal data class BridgeProfile(
         .put("hiddenReadings", display.hiddenReadings)
         .put("escFirst", display.escFirst)
         .put("holdSettings", display.holdSettings)
-        .put("keepCockpitOnResize", display.keepCockpitOnResize)
+        .put("keepCockpitOnResize", display.keepPageOnResize)
         .put("customOrder", display.customOrder)
         .put("readingOrder", display.readingOrder.joinToString(",") { it.name })
         .put("restrictedTripleTap", display.restrictedTripleTap)

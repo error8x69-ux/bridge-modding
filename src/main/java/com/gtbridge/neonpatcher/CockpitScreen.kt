@@ -136,11 +136,6 @@ private fun CockpitControls(
         }
         Panel {
             Text("Bedienung", style = MaterialTheme.typography.titleMedium)
-            DisplaySwitch("Cockpit beim Bildschirmwechsel offen halten", display.keepCockpitOnResize, enabled) {
-                change(display.copy(keepCockpitOnResize = it))
-            }
-            Text("Gilt für GT Mod Bridge beim Falten, Drehen und Ändern der Fenstergröße.",
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             DisplaySwitch("Popup „Messwerte & Quellen“ beim Tippen ausblenden",
                 display.hideReadingsPopup || display.holdSettings, enabled && !display.holdSettings) {
                 change(display.copy(hideReadingsPopup = it))
