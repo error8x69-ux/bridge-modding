@@ -4,6 +4,8 @@ import android.app.Activity;
 import android.app.Application;
 import android.os.Build;
 import android.os.Bundle;
+import android.view.GestureDetector;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowInsets;
@@ -38,7 +40,6 @@ public final class CloneStatusFactory extends CoreComponentFactory {
         private final Set<View> watched = Collections.newSetFromMap(new WeakHashMap<>());
         private final Set<View> instrumentViews = Collections.newSetFromMap(new WeakHashMap<>());
         private final Set<View> gridAttempts = Collections.newSetFromMap(new WeakHashMap<>());
-        private final Set<View> tapAttempts = Collections.newSetFromMap(new WeakHashMap<>());
         private int options;
         private boolean optionsLoaded;
         private ReorderedCockpit.Config grid;
@@ -85,13 +86,6 @@ public final class CloneStatusFactory extends CoreComponentFactory {
             View instrument = cockpit.findViewWithTag("cockpitInstrument030");
             if (instrument == null || !(instrument.getParent() instanceof FrameLayout)) return;
             FrameLayout frame = (FrameLayout) instrument.getParent();
-            if ((options & RESTRICTED_TRIPLE_TAP) != 0 && tapAttempts.add(instrument)) {
-                try {
-                    instrument.setOnClickListener(new RestrictedProfileTap(activity));
-                } catch (ReflectiveOperationException unavailable) {
-                    android.util.Log.w("BridgeModding", "Restricted profile action unavailable", unavailable);
-                }
-            }
             if (grid != null && gridAttempts.add(instrument)) {
                 View trip = cockpit.findViewWithTag("cockpitTripReset");
                 try {
@@ -102,18 +96,49 @@ public final class CloneStatusFactory extends CoreComponentFactory {
                     android.util.Log.w("BridgeModding", "Cockpit readings unavailable", unavailable);
                 }
             }
-            if ((options & HOLD_SETTINGS) == 0 || instrumentViews.contains(instrument)) return;
-            installHoldAction(instrument, frame);
+            if ((options & (HOLD_SETTINGS | RESTRICTED_TRIPLE_TAP)) != 0 && instrumentViews.add(instrument)) {
+                installGestures(activity, instrument, frame);
+            }
         }
 
-        private void installHoldAction(View instrument, FrameLayout frame) {
+        private void installGestures(Activity activity, View instrument, FrameLayout frame) {
+            View search = (options & HOLD_SETTINGS) == 0 ? null : findSearch(frame);
+            View.OnClickListener restricted = null;
+            if ((options & RESTRICTED_TRIPLE_TAP) != 0) {
+                try {
+                    restricted = new RestrictedProfileTap(activity);
+                } catch (ReflectiveOperationException unavailable) {
+                    android.util.Log.w("BridgeModding", "Restricted profile action unavailable", unavailable);
+                }
+            }
+            if (restricted == null && search == null) return;
+            View.OnClickListener tap = restricted;
+            GestureDetector gestures = new GestureDetector(activity, new GestureDetector.SimpleOnGestureListener() {
+                @Override public boolean onDown(MotionEvent event) {
+                    return true;
+                }
+                @Override public boolean onSingleTapUp(MotionEvent event) {
+                    if (tap != null) tap.onClick(instrument);
+                    return true;
+                }
+                @Override public void onLongPress(MotionEvent event) {
+                    if (search != null) search.performClick();
+                }
+            });
+            gestures.setOnDoubleTapListener(null);
+            gestures.setIsLongpressEnabled(search != null);
+            instrument.setOnTouchListener((view, event) -> {
+                gestures.onTouchEvent(event);
+                return true;
+            });
+        }
+
+        private View findSearch(FrameLayout frame) {
             int headerIndex = frame.getChildAt(1) instanceof ReorderedCockpit ? 2 : 1;
-            if (!(frame.getChildAt(headerIndex) instanceof LinearLayout)) return;
+            if (!(frame.getChildAt(headerIndex) instanceof LinearLayout)) return null;
             LinearLayout actions = (LinearLayout) frame.getChildAt(headerIndex);
             View search = actions.getChildAt(0);
-            if (search == null || !search.hasOnClickListeners()) return;
-            instrument.setOnLongClickListener(view -> search.performClick());
-            instrumentViews.add(instrument);
+            return search != null && search.hasOnClickListeners() ? search : null;
         }
 
         @Override public void onActivityCreated(Activity activity, Bundle state) {}

@@ -157,6 +157,7 @@ final class BridgeNeonDex {
                 if (COCKPIT_VIEW.equals(owner)) {
                     if (display.holdSettings) verifyHoldSettings(code, name, display);
                     if ("<init>".equals(name)) {
+                        if (display.hideReadingsPopup) patchInstrumentTap(code, display);
                         if (display.tripTargetHidden) patchTripTarget(code, display);
                         if (display.customGrid && hasConstString(code, 0x11, "fixedCockpit030")
                                 && hasConstString(code, 0x22, "cockpitInstrument030")
@@ -334,6 +335,22 @@ final class BridgeNeonDex {
 
     private void eraseInvoke(int offset) {
         for (int word = 0; word < 3; word++) writeShort(offset + 2 * word, 0);
+    }
+
+    private void patchInstrumentTap(int code, DisplayPatch options) throws IOException {
+        if (!hasConstString(code, 0x22, "cockpitInstrument030")) return;
+        for (int position = 0, units = u32(code + 12); position < units;) {
+            int offset = code + 16 + 2 * position;
+            int length = width(u16(offset), offset);
+            if (length <= 0 || length > units - position) throw unsupportedCockpit("Cockpit-Tippschutz");
+            if (length == 3 && u16(offset) == 0x206e
+                    && methodIs(u16(offset + 2), INSTRUMENT, "setOnClickListener")) {
+                eraseInvoke(offset);
+                options.applied |= DisplayPatch.INSTRUMENT_TAP;
+                return;
+            }
+            position += length;
+        }
     }
 
     private void verifyHoldSettings(int code, String name, DisplayPatch options) throws IOException {
@@ -540,6 +557,7 @@ final class BridgeNeonDex {
         static final int GRID_FORMAT = 8192;
         static final int RESTRICTED_MAPPING = 16384;
         static final int RESTRICTED_ACTION = 32768;
+        static final int INSTRUMENT_TAP = 65536;
 
         final boolean hideStatusBar;
         final boolean compactNavigation;
@@ -579,7 +597,7 @@ final class BridgeNeonDex {
         void verify() throws IOException {
             int required = (hideStatusBar ? STATUS_BAR : 0)
                 | (compactNavigation ? WORKSPACE_NAV | LEGACY_NAV_ITEM | LEGACY_NAV_ROW : 0)
-                | (hideReadingsPopup ? READINGS_POPUP : 0);
+                | (hideReadingsPopup ? READINGS_POPUP | INSTRUMENT_TAP : 0);
             if ((applied & required) != required) throw unsupportedDisplay();
             if (cockpitTextPercent != 100 && (applied & COCKPIT_TEXT) == 0) {
                 throw unsupportedCockpit("Cockpit-Schrift");

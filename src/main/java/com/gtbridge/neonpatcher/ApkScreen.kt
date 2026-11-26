@@ -167,11 +167,6 @@ internal fun ApkScreen(state: PatchState, actions: ApkActions, modifier: Modifie
                 state.installed?.let {
                     VersionRow("Installiert", it.label)
                 }
-                if (state.installed != null) {
-                    FilledTonalButton(actions.open, enabled = idle, modifier = Modifier.fillMaxWidth()) {
-                        Text("${BridgeNeonBuild.CLONE_LABEL} öffnen")
-                    }
-                }
                 if (state.output != null) {
                     OutlinedButton(actions.install, enabled = idle, modifier = Modifier.fillMaxWidth()) {
                         Text("Kopie installieren")
@@ -180,6 +175,11 @@ internal fun ApkScreen(state: PatchState, actions: ApkActions, modifier: Modifie
                         Text("APK speichern")
                     }
                 }
+            }
+        }
+        if (state.installed != null) {
+            FilledTonalButton(actions.open, enabled = idle, modifier = Modifier.fillMaxWidth()) {
+                Text("${BridgeNeonBuild.CLONE_LABEL} öffnen")
             }
         }
     }
