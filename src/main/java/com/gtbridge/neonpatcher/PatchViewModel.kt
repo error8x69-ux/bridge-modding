@@ -99,7 +99,8 @@ internal class PatchViewModel(application: Application) : AndroidViewModel(appli
         readingOrder = preferences.getString("readingOrder", null)?.let { encoded ->
             runCatching { parseReadingOrder(encoded) }.getOrNull()
         } ?: defaultReadingOrder,
-        restrictedTripleTap = preferences.getBoolean("restrictedTripleTap", false)
+        restrictedTripleTap = preferences.getBoolean("restrictedTripleTap", false),
+        keepCockpitOnResize = preferences.getBoolean("keepCockpitOnResize", false)
     ), OnlineOption.entries.filterTo(mutableSetOf()) { preferences.getBoolean("block${it.name}", false) }))
     val state = model.asStateFlow()
 
@@ -157,6 +158,7 @@ internal class PatchViewModel(application: Application) : AndroidViewModel(appli
             putBoolean("customOrder", display.customOrder)
             putString("readingOrder", display.readingOrder.joinToString(",") { it.name })
             putBoolean("restrictedTripleTap", display.restrictedTripleTap)
+            putBoolean("keepCockpitOnResize", display.keepCockpitOnResize)
             OnlineOption.entries.forEach { putBoolean("block${it.name}", it in blocked) }
         }.apply()
         model.update { it.copy(palette = palette, display = display, blocked = blocked) }

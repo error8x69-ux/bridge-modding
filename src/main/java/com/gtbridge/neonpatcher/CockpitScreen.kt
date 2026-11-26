@@ -45,24 +45,26 @@ internal fun CockpitScreen(
     continueToApk: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val settingsScroll = rememberScrollState()
+    val previewScroll = rememberScrollState()
     BoxWithConstraints(modifier.padding(horizontal = 16.dp)) {
         val settings = @Composable {
             CockpitControls(state.display, state.stage == null, changeDisplay, continueToApk)
         }
         if (maxWidth >= 680.dp) {
             Row(Modifier.padding(vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                Column(Modifier.weight(1f).verticalScroll(previewScroll)) {
                     DashboardPreview(state.palette, state.display)
                 }
-                Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) { settings() }
+                Column(Modifier.weight(1f).verticalScroll(settingsScroll)) { settings() }
             }
         } else if (maxHeight >= 590.dp) {
             Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 DashboardPreview(state.palette, state.display)
-                Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) { settings() }
+                Column(Modifier.weight(1f).verticalScroll(settingsScroll)) { settings() }
             }
         } else {
-            Column(Modifier.verticalScroll(rememberScrollState()).padding(top = 8.dp),
+            Column(Modifier.verticalScroll(settingsScroll).padding(top = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 DashboardPreview(state.palette, state.display)
                 settings()
@@ -134,6 +136,11 @@ private fun CockpitControls(
         }
         Panel {
             Text("Bedienung", style = MaterialTheme.typography.titleMedium)
+            DisplaySwitch("Cockpit beim Bildschirmwechsel offen halten", display.keepCockpitOnResize, enabled) {
+                change(display.copy(keepCockpitOnResize = it))
+            }
+            Text("Gilt für GT Mod Bridge beim Falten, Drehen und Ändern der Fenstergröße.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             DisplaySwitch("Popup „Messwerte & Quellen“ beim Tippen ausblenden",
                 display.hideReadingsPopup || display.holdSettings, enabled && !display.holdSettings) {
                 change(display.copy(hideReadingsPopup = it))

@@ -36,6 +36,7 @@ internal data class BridgeProfile(
         if (display.customOrder) add("Cockpit-Raster · " + display.visibleOrderedReadings
             .joinToString { it.tileLabel }.ifEmpty { "keine Zusatzwerte" })
         if (display.holdSettings) add("Einstellungen per langem Druck öffnen")
+        if (display.keepCockpitOnResize) add("Cockpit beim Bildschirmwechsel offen halten")
         if (display.tripleTapEnabled) add("Dreifachtipp lädt das gedrosselte Profil")
     }
 
@@ -55,6 +56,7 @@ internal data class BridgeProfile(
         .put("hiddenReadings", display.hiddenReadings)
         .put("escFirst", display.escFirst)
         .put("holdSettings", display.holdSettings)
+        .put("keepCockpitOnResize", display.keepCockpitOnResize)
         .put("customOrder", display.customOrder)
         .put("readingOrder", display.readingOrder.joinToString(",") { it.name })
         .put("restrictedTripleTap", display.restrictedTripleTap)
@@ -83,7 +85,8 @@ internal data class BridgeProfile(
                     json.has("holdSettings") && flag("holdSettings"),
                     json.has("customOrder") && flag("customOrder"),
                     if (json.has("readingOrder")) parseReadingOrder(json.getString("readingOrder")) else defaultReadingOrder,
-                    json.has("restrictedTripleTap") && flag("restrictedTripleTap")),
+                    json.has("restrictedTripleTap") && flag("restrictedTripleTap"),
+                    json.has("keepCockpitOnResize") && flag("keepCockpitOnResize")),
                 OnlineOption.entries.filterTo(mutableSetOf()) { mask and (1 shl it.ordinal) != 0 }
             )
         }

@@ -13,6 +13,7 @@
             android:authorities="com.gtbridge.neonpatcher.apk"
             android:exported="false" android:grantUriPermissions="true" />
         <activity android:name=".PatcherActivity" android:exported="true"
+            android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation|density"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

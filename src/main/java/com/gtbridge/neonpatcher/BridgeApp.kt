@@ -31,6 +31,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,6 +56,7 @@ internal fun BridgeApp(
         ProfileImportDialog(it, state.stage == null, actions.acceptImport, actions.dismissImport)
     }
     var section by rememberSaveable { mutableStateOf(Section.Design) }
+    val screenState = rememberSaveableStateHolder()
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth >= 720.dp
         BackHandler(section != Section.Design) { section = Section.Design }
@@ -97,13 +99,13 @@ internal fun BridgeApp(
                             }
                         }
                     }
-                    when (section) {
+                    screenState.SaveableStateProvider(section.name) { when (section) {
                         Section.Design -> DesignScreen(state, choosePreset, changeColor,
                             { section = Section.Cockpit }, Modifier.fillMaxSize())
                         Section.Cockpit -> CockpitScreen(state, actions.changeDisplay,
                             { section = Section.Apk }, Modifier.fillMaxSize())
                         Section.Apk -> ApkScreen(state, actions, Modifier.fillMaxSize())
-                    }
+                    } }
                 }
             }
         }

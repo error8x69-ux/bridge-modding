@@ -57,13 +57,13 @@ final class BridgeNeonBuild {
     }
 
     static int patch(Path source, Path output, Map<Integer, Integer> colors) throws Exception {
-        return patch(source, output, colors, null, false, false, false, 0, 100, 0, false, false, null, false);
+        return patch(source, output, colors, null, false, false, false, 0, 100, 0, false, false, null, false, false);
     }
 
     static int patch(Path source, Path output, Map<Integer, Integer> colors,
                      byte[] helperDex, boolean hideStatusBar, boolean compactNavigation, boolean hideReadingsPopup,
                      int onlineMask, int cockpitTextPercent, int hiddenReadings, boolean escFirst,
-                     boolean holdSettings, CockpitGrid grid, boolean restrictedTripleTap)
+                     boolean holdSettings, CockpitGrid grid, boolean restrictedTripleTap, boolean keepCockpitOnResize)
             throws Exception {
         int dexColors = 0;
         int themeColors = 0;
@@ -114,6 +114,7 @@ final class BridgeNeonBuild {
                     labelCount += renameResourceString(data, ORIGINAL_LABEL, CLONE_LABEL);
                     if (name.equals("AndroidManifest.xml")) {
                         manifestCount++;
+                        if (keepCockpitOnResize) data = keepCockpitActivities(data);
                         if (helperDex != null && renameResourceString(data, ORIGINAL_FACTORY, STATUS_FACTORY) != 1) {
                             throw new IOException("Diese Bridge-Version unterstützt die gewählte Cockpit-App-Komponente nicht.");
                         }
@@ -148,6 +149,100 @@ final class BridgeNeonBuild {
         }
         display.verify();
         return dexColors;
+    }
+
+    private static byte[] keepCockpitActivities(byte[] data) throws IOException {
+        final int configResource = 0x0101001f;
+        // orientation, screenLayout, screenSize, smallestScreenSize and density.
+        final int sizeChanges = 0x1d80;
+        int pool = readUnsignedShort(data, 2);
+        int poolEnd = chunkEnd(data, pool, data.length);
+        int map = poolEnd;
+        int mapEnd = chunkEnd(data, map, data.length);
+        if (readUnsignedShort(data, pool) != 1 || readUnsignedShort(data, map) != 0x0180) {
+            throw new IOException("Android-Manifest für Bildschirmwechsel nicht unterstützt.");
+        }
+        int ids = map + readUnsignedShort(data, map + 2);
+        int configName = -1;
+        for (int entry = ids; entry + 4 <= mapEnd; entry += 4) {
+            if (readInt(data, entry) == configResource) configName = (entry - ids) / 4;
+        }
+        if (configName < 0) throw new IOException("configChanges fehlt im Original-Manifest.");
+        int patched = 0;
+        for (int chunk = mapEnd; chunk < data.length;) {
+            int end = chunkEnd(data, chunk, data.length);
+            if (readUnsignedShort(data, chunk) == 0x0102 && end - chunk >= 36
+                    && poolMatches(data, pool, poolEnd, readInt(data, chunk + 20), "activity")) {
+                int start = chunk + 16 + readUnsignedShort(data, chunk + 24);
+                int width = readUnsignedShort(data, chunk + 26);
+                int count = readUnsignedShort(data, chunk + 28);
+                if (width != 20 || start < chunk + 36 || start + count * width > end) {
+                    throw new IOException("Ungültige Aktivitätsattribute im Android-Manifest.");
+                }
+                int config = -1, namespace = -1, insert = count;
+                boolean target = false;
+                for (int i = 0; i < count; i++) {
+                    int attribute = start + i * width;
+                    int name = readInt(data, attribute + 4);
+                    int id = name >= 0 && name < (mapEnd - ids) / 4 ? readInt(data, ids + name * 4) : 0;
+                    if (id > configResource && insert == count) insert = i;
+                    if (id == configResource) config = attribute;
+                    if (id == 0x01010003) {
+                        namespace = readInt(data, attribute);
+                        int value = readInt(data, attribute + 16);
+                        target = poolMatches(data, pool, poolEnd, value, "de.smartrepair.smartbridge.MainActivity")
+                            || poolMatches(data, pool, poolEnd, value, "de.smartrepair.smartbridge.GtVescDemoActivity");
+                    }
+                }
+                if (target && config >= 0) {
+                    if (Byte.toUnsignedInt(data[config + 15]) != 0x11) {
+                        throw new IOException("Unerwarteter configChanges-Typ im Original-Manifest.");
+                    }
+                    writeInt(data, config + 16, readInt(data, config + 16) | sizeChanges);
+                    patched++;
+                } else if (target) {
+                    int at = start + insert * width;
+                    var expanded = Arrays.copyOf(data, data.length + width);
+                    System.arraycopy(data, at, expanded, at + width, data.length - at);
+                    writeInt(expanded, at, namespace);
+                    writeInt(expanded, at + 4, configName);
+                    writeInt(expanded, at + 8, -1);
+                    writeInt(expanded, at + 12, 0x11000008);
+                    writeInt(expanded, at + 16, sizeChanges);
+                    writeInt(expanded, 4, expanded.length);
+                    writeInt(expanded, chunk + 4, end - chunk + width);
+                    writeShort(expanded, chunk + 28, count + 1);
+                    for (int index = chunk + 30; index <= chunk + 34; index += 2) {
+                        int before = readUnsignedShort(expanded, index);
+                        if (before > insert) writeShort(expanded, index, before + 1);
+                    }
+                    data = expanded;
+                    end += width;
+                    patched++;
+                }
+            }
+            chunk = end;
+        }
+        if (patched == 0) throw new IOException("Cockpit-Aktivität im Original-Manifest nicht gefunden.");
+        return data;
+    }
+
+    private static boolean poolMatches(byte[] data, int pool, int end, int index, String value) {
+        int count = readInt(data, pool + 8);
+        if (index < 0 || index >= count || index >= (end - pool - 28) / 4) return false;
+        boolean utf8 = (readInt(data, pool + 16) & 0x100) != 0;
+        int table = pool + readUnsignedShort(data, pool + 2);
+        if (table + index * 4 > end - 4) return false;
+        int start = pool + readInt(data, pool + 20) + readInt(data, table + index * 4);
+        byte[] expected = value.getBytes(utf8 ? StandardCharsets.UTF_8 : StandardCharsets.UTF_16LE);
+        if (start < table || start > end - 2 - expected.length) return false;
+        return readUnsignedShort(data, start) == (value.length() | (utf8 ? expected.length << 8 : 0))
+            && Arrays.equals(data, start + 2, start + 2 + expected.length, expected, 0, expected.length);
+    }
+
+    private static void writeShort(byte[] data, int offset, int value) {
+        data[offset] = (byte) value;
+        data[offset + 1] = (byte) (value >>> 8);
     }
 
     record CockpitGrid(CockpitReading[] order, int background, int foreground, int accent) {
