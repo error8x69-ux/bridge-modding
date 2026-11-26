@@ -58,14 +58,14 @@ final class BridgeNeonBuild {
     }
 
     static int patch(Path source, Path output, Map<Integer, Integer> colors) throws Exception {
-        return patch(source, output, colors, null, false, false, false, 0, 100, 0, false, false, null, false, false, null);
+        return patch(source, output, colors, null, false, false, false, 0, 100, 0, false, false, null, false, false, null, null);
     }
 
     static int patch(Path source, Path output, Map<Integer, Integer> colors,
                      byte[] helperDex, boolean hideStatusBar, boolean compactNavigation, boolean hideReadingsPopup,
                      int onlineMask, int cockpitTextPercent, int hiddenReadings, boolean escFirst,
                      boolean holdSettings, CockpitGrid grid, boolean restrictedTripleTap, boolean keepPageOnResize,
-                     byte[] appliedProfile)
+                     byte[] appliedProfile, CockpitTitle title)
             throws Exception {
         int dexColors = 0;
         int themeColors = 0;
@@ -76,11 +76,11 @@ final class BridgeNeonBuild {
         int nativeOnlineMask = modUpdates ? onlineMask | 1 : onlineMask;
         var display = new BridgeNeonDex.DisplayPatch(hideStatusBar, compactNavigation, hideReadingsPopup || holdSettings,
             nativeOnlineMask, cockpitTextPercent, hiddenReadings, escFirst && grid == null, holdSettings, grid != null,
-            restrictedTripleTap, keepPageOnResize);
+            restrictedTripleTap, keepPageOnResize, title != null);
         if (restrictedTripleTap && !display.hideReadingsPopup) {
             throw new IOException("Der Dreifachtipp setzt den Tippschutz voraus.");
         }
-        if ((helperDex != null) != (hideStatusBar || holdSettings || grid != null || restrictedTripleTap || modUpdates)) {
+        if ((helperDex != null) != (hideStatusBar || holdSettings || grid != null || restrictedTripleTap || modUpdates || title != null)) {
             throw new IOException("Cockpit-App-Komponente fehlt oder wurde unerwartet übergeben.");
         }
         try (var input = new ZipFile(source.toFile());
@@ -147,8 +147,9 @@ final class BridgeNeonBuild {
                 var options = new ZipEntry(HELPER_OPTIONS);
                 options.setMethod(ZipEntry.STORED);
                 int flags = (hideStatusBar ? 1 : 0) | (holdSettings ? 2 : 0) | (restrictedTripleTap ? 8 : 0)
-                    | (modUpdates ? 16 : 0);
-                writeEntry(zip, counter, options, encodeHelperOptions(flags, grid, cockpitTextPercent));
+                    | (modUpdates ? 16 : 0) | (title != null ? 32 : 0)
+                    | (grid != null && grid.hideTileBackground() ? 64 : 0);
+                writeEntry(zip, counter, options, encodeHelperOptions(flags, grid, cockpitTextPercent, title));
             }
         }
         if (manifestCount != 1 || dexNumber == 0) {
@@ -258,10 +259,12 @@ final class BridgeNeonBuild {
         data[offset + 1] = (byte) (value >>> 8);
     }
 
-    record CockpitGrid(CockpitReading[] order, int background, int foreground, int accent) {
-    }
+    record CockpitGrid(CockpitReading[] order, int background, int foreground, int accent, boolean hideTileBackground) {}
 
-    private static byte[] encodeHelperOptions(int flags, CockpitGrid grid, int textPercent) throws IOException {
+    record CockpitTitle(String text, int color) {}
+
+    private static byte[] encodeHelperOptions(int flags, CockpitGrid grid, int textPercent, CockpitTitle title)
+            throws IOException {
         var bytes = new ByteArrayOutputStream();
         try (var stream = new DataOutputStream(bytes)) {
             stream.writeByte(flags | (grid != null ? 4 : 0));
@@ -272,6 +275,11 @@ final class BridgeNeonBuild {
                 stream.writeByte(textPercent);
                 stream.writeByte(grid.order().length);
                 for (var reading : grid.order()) stream.writeUTF(reading.name());
+            }
+            if (title != null) {
+                stream.writeUTF(title.text());
+                stream.writeInt(title.color());
+                stream.writeByte(textPercent);
             }
         }
         return bytes.toByteArray();

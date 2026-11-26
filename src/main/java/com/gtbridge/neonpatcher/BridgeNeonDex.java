@@ -32,7 +32,7 @@ final class BridgeNeonDex {
     int patchColors(Map<Integer, Integer> colors, DisplayPatch display) throws IOException {
         boolean recolor = !colors.isEmpty();
         if (!recolor && !display.hideStatusBar && !display.compactNavigation
-                && !display.hideReadingsPopup && !display.keepPageOnResize && display.onlineMask == 0
+                && !display.hideReadingsPopup && !display.keepPageOnResize && !display.customTitle && display.onlineMask == 0
                 && display.cockpitTextPercent == 100 && display.hiddenReadings == 0 && !display.escFirst) {
             return 0;
         }
@@ -159,7 +159,7 @@ final class BridgeNeonDex {
                     if ("<init>".equals(name)) {
                         if (display.hideReadingsPopup) patchInstrumentTap(code, display);
                         if (display.tripTargetHidden) patchTripTarget(code, display);
-                        if (display.customGrid && hasConstString(code, 0x11, "fixedCockpit030")
+                        if ((display.customGrid || display.customTitle) && hasConstString(code, 0x11, "fixedCockpit030")
                                 && hasConstString(code, 0x22, "cockpitInstrument030")
                                 && invokesAt(code, 0x2d, 0x306e, 0x0765, "Landroid/widget/FrameLayout;", "addView")) {
                             display.applied |= DisplayPatch.GRID_TARGET;
@@ -176,6 +176,16 @@ final class BridgeNeonDex {
     }
 
     private void patchInstrument(int code, String name, DisplayPatch options) throws IOException {
+        if (options.customTitle && "header".equals(name)) {
+            if (!string(0).isEmpty() || !hasConstString(code, 0x1c, "GT VESC ")
+                    || !hasConstString(code, 0x3d, "GT VESC ") || !hasConstString(code, 0x4b, "Bridge")) {
+                throw unsupportedCockpit("Cockpit-Schriftzug");
+            }
+            for (int offset : new int[] {0x1c, 0x3d, 0x4b}) {
+                writeShort(instructionOffset(code, offset, 2) + 2, 0);
+            }
+            options.applied |= DisplayPatch.CUSTOM_TITLE;
+        }
         if (options.cockpitTextPercent != 100 && name.equals("text")) {
             int start = instructionOffset(code, 0, 23);
             int field = u16(start + 8);
@@ -573,6 +583,7 @@ final class BridgeNeonDex {
         static final int RESTRICTED_ACTION = 32768;
         static final int INSTRUMENT_TAP = 65536;
         static final int KEEP_PAGE = 131072;
+        static final int CUSTOM_TITLE = 262144;
 
         final boolean hideStatusBar;
         final boolean compactNavigation;
@@ -586,6 +597,7 @@ final class BridgeNeonDex {
         final boolean tripTargetHidden;
         final boolean restrictedTripleTap;
         final boolean keepPageOnResize;
+        final boolean customTitle;
         int appliedReadings;
         int applied;
         int onlineApplied;
@@ -593,7 +605,7 @@ final class BridgeNeonDex {
         DisplayPatch(boolean hideStatusBar, boolean compactNavigation, boolean hideReadingsPopup,
                      int onlineMask, int cockpitTextPercent, int hiddenReadings, boolean escFirst,
                      boolean holdSettings, boolean customGrid, boolean restrictedTripleTap,
-                     boolean keepPageOnResize) {
+                     boolean keepPageOnResize, boolean customTitle) {
             this.hideStatusBar = hideStatusBar;
             this.compactNavigation = compactNavigation;
             this.hideReadingsPopup = hideReadingsPopup;
@@ -605,6 +617,7 @@ final class BridgeNeonDex {
             this.customGrid = customGrid;
             this.restrictedTripleTap = restrictedTripleTap;
             this.keepPageOnResize = keepPageOnResize;
+            this.customTitle = customTitle;
             tripTargetHidden = TRIP.hiddenIn(hiddenReadings) && CONSUMPTION.hiddenIn(hiddenReadings);
         }
 
@@ -632,6 +645,8 @@ final class BridgeNeonDex {
             }
             int gridChecks = GRID_TARGET | GRID_READING | GRID_SCALE | GRID_FORMAT;
             if (customGrid && (applied & gridChecks) != gridChecks) throw unsupportedCockpit("Freie Reihenfolge");
+            int titleChecks = GRID_TARGET | CUSTOM_TITLE;
+            if (customTitle && (applied & titleChecks) != titleChecks) throw unsupportedCockpit("Cockpit-Schriftzug");
             int profileChecks = RESTRICTED_MAPPING | RESTRICTED_ACTION;
             if (restrictedTripleTap && (applied & profileChecks) != profileChecks) {
                 throw unsupportedCockpit("Dreifachtipp für das gedrosselte Profil");

@@ -108,7 +108,9 @@ internal class PatchViewModel(application: Application) : AndroidViewModel(appli
             runCatching { parseReadingOrder(encoded) }.getOrNull()
         } ?: defaultReadingOrder,
         restrictedTripleTap = preferences.getBoolean("restrictedTripleTap", false),
-        keepPageOnResize = preferences.getBoolean("keepCockpitOnResize", false)
+        keepPageOnResize = preferences.getBoolean("keepCockpitOnResize", false),
+        hideCockpitTileBackground = preferences.getBoolean("hideCockpitTileBackground", false),
+        cockpitTitle = preferences.getString("cockpitTitle", null)?.takeIf(::validCockpitTitle).orEmpty()
     ), OnlineOption.entries.filterTo(mutableSetOf()) { preferences.getBoolean("block${it.name}", false) }))
     val state = model.asStateFlow()
 
@@ -182,6 +184,8 @@ internal class PatchViewModel(application: Application) : AndroidViewModel(appli
             putBoolean("escFirst", display.escFirst)
             putBoolean("holdSettings", display.holdSettings)
             putBoolean("customOrder", display.customOrder)
+            putBoolean("hideCockpitTileBackground", display.hideCockpitTileBackground)
+            putString("cockpitTitle", display.cockpitTitle)
             putString("readingOrder", display.readingOrder.joinToString(",") { it.name })
             putBoolean("restrictedTripleTap", display.restrictedTripleTap)
             putBoolean("keepCockpitOnResize", display.keepPageOnResize)

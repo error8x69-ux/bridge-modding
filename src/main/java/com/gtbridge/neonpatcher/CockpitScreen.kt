@@ -23,6 +23,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -35,6 +36,7 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -87,6 +89,9 @@ private fun CockpitControls(
                 change(display.copy(customOrder = it))
             }
             if (display.customOrder) {
+                DisplaySwitch("Kästchenhintergrund ausblenden", display.hideCockpitTileBackground, enabled) {
+                    change(display.copy(hideCockpitTileBackground = it))
+                }
                 ReadingOrderEditor(display, enabled, change)
             }
         }
@@ -107,6 +112,16 @@ private fun CockpitControls(
         }
         Panel {
             Text("Darstellung", style = MaterialTheme.typography.titleMedium)
+            OutlinedTextField(
+                value = display.cockpitTitle,
+                onValueChange = { if (validCockpitTitle(it)) change(display.copy(cockpitTitle = it)) },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = enabled,
+                singleLine = true,
+                label = { Text("Eigener Cockpit-Schriftzug") },
+                placeholder = { Text("GT VESC Bridge") },
+                supportingText = { Text("Bis zu $maxCockpitTitleLength Zeichen. Leer für den Originaltitel.") }
+            )
             TextButton(
                 onClick = { change(display.copy(hideStatusBar = true, compactNavigation = true)) },
                 enabled = enabled && (!display.hideStatusBar || !display.compactNavigation)
@@ -223,6 +238,9 @@ private fun DashboardPreview(palette: BridgePalette, display: BridgeDisplayOptio
                     Text("9:41  ·  Android", Modifier.fillMaxWidth(), textAlign = TextAlign.End,
                         fontSize = 9.sp, color = text)
                 }
+                Text(display.cockpitTitle.trim().ifEmpty { "GT VESC Bridge" },
+                    modifier = Modifier.fillMaxWidth(), fontSize = (16 * scale).sp,
+                    fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     Text("Akku 82 %", color = text, fontWeight = FontWeight.SemiBold, fontSize = (12 * scale).sp)
@@ -247,7 +265,9 @@ private fun DashboardPreview(palette: BridgePalette, display: BridgeDisplayOptio
                     }
                 }
                 if (display.customOrder) {
-                    OrderedPreview(display.visibleOrderedReadings, scale, lerp(background, accent, 0.27f), accent)
+                    val fill = if (display.hideCockpitTileBackground) Color.Transparent
+                        else lerp(background, accent, 0.27f)
+                    OrderedPreview(display.visibleOrderedReadings, scale, fill, accent)
                 } else {
                     PreviewValue("Leistung", "0,83 kW", show(CockpitReading.POWER), scale, Modifier.fillMaxWidth())
                     Box(Modifier.height(21.dp), contentAlignment = Alignment.Center) {

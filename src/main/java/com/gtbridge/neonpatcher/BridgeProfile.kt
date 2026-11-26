@@ -15,6 +15,13 @@ internal enum class OnlineOption(val label: String) {
 
 internal val privateOnlineOptions = setOf(OnlineOption.Analytics, OnlineOption.Ranking)
 
+internal const val maxCockpitTitleLength = 32
+
+internal fun validCockpitTitle(text: String): Boolean =
+    text.length <= maxCockpitTitleLength &&
+        text.none { it.isISOControl() || it.category == CharCategory.LINE_SEPARATOR ||
+            it.category == CharCategory.PARAGRAPH_SEPARATOR }
+
 internal data class BridgeProfile(
     val palette: BridgePalette,
     val display: BridgeDisplayOptions = BridgeDisplayOptions(),
@@ -35,6 +42,8 @@ internal data class BridgeProfile(
         if (display.escFirst && !display.customOrder) add("ESC-Temperatur links vom Motor")
         if (display.customOrder) add("Cockpit-Raster · " + display.visibleOrderedReadings
             .joinToString { it.tileLabel }.ifEmpty { "keine Zusatzwerte" })
+        if (display.customOrder && display.hideCockpitTileBackground) add("Kästchenhintergrund ausgeblendet")
+        if (display.cockpitTitle.isNotBlank()) add("Cockpit-Schriftzug · ${display.cockpitTitle.trim()}")
         if (display.holdSettings) add("Einstellungen per langem Druck öffnen")
         if (display.keepPageOnResize) add("Aktuelle Seite beim Bildschirmwechsel behalten")
         if (display.tripleTapEnabled) add("Dreifachtipp lädt das gedrosselte Profil")
@@ -58,6 +67,8 @@ internal data class BridgeProfile(
         .put("holdSettings", display.holdSettings)
         .put("keepCockpitOnResize", display.keepPageOnResize)
         .put("customOrder", display.customOrder)
+        .put("hideCockpitTileBackground", display.hideCockpitTileBackground)
+        .put("cockpitTitle", display.cockpitTitle)
         .put("readingOrder", display.readingOrder.joinToString(",") { it.name })
         .put("restrictedTripleTap", display.restrictedTripleTap)
         .put("onlineMask", onlineMask)
@@ -77,6 +88,8 @@ internal data class BridgeProfile(
                 else -> 0
             }
             require(hidden and CockpitReading.allowedMask().inv() == 0)
+            val title = if (json.has("cockpitTitle")) json.get("cockpitTitle") as String else ""
+            require(validCockpitTitle(title))
             return BridgeProfile(
                 BridgePalette(color("background"), color("foreground"), color("accent"), flag("original")),
                 BridgeDisplayOptions(flag("hideStatusBar"), flag("compactNavigation"), flag("hideReadingsPopup"),
@@ -86,7 +99,8 @@ internal data class BridgeProfile(
                     json.has("customOrder") && flag("customOrder"),
                     if (json.has("readingOrder")) parseReadingOrder(json.getString("readingOrder")) else defaultReadingOrder,
                     json.has("restrictedTripleTap") && flag("restrictedTripleTap"),
-                    json.has("keepCockpitOnResize") && flag("keepCockpitOnResize")),
+                    json.has("keepCockpitOnResize") && flag("keepCockpitOnResize"),
+                    json.has("hideCockpitTileBackground") && flag("hideCockpitTileBackground"), title),
                 OnlineOption.entries.filterTo(mutableSetOf()) { mask and (1 shl it.ordinal) != 0 }
             )
         }

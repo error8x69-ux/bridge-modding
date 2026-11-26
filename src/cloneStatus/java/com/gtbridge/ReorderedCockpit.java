@@ -40,17 +40,20 @@ final class ReorderedCockpit extends FrameLayout {
         final int foreground;
         final int accent;
         final int textPercent;
+        final boolean hideTileBackground;
         final CockpitReading[] order;
 
-        private Config(int background, int foreground, int accent, int textPercent, CockpitReading[] order) {
+        private Config(int background, int foreground, int accent, int textPercent, CockpitReading[] order,
+                       boolean hideTileBackground) {
             this.background = background;
             this.foreground = foreground;
             this.accent = accent;
             this.textPercent = textPercent;
             this.order = order;
+            this.hideTileBackground = hideTileBackground;
         }
 
-        static Config read(DataInputStream stream) throws IOException {
+        static Config read(DataInputStream stream, boolean hideTileBackground) throws IOException {
             int background = stream.readInt();
             int foreground = stream.readInt();
             int accent = stream.readInt();
@@ -68,7 +71,7 @@ final class ReorderedCockpit extends FrameLayout {
             } catch (IllegalArgumentException invalid) {
                 throw new IOException("Unknown cockpit tile", invalid);
             }
-            return new Config(background, foreground, accent, textPercent, order);
+            return new Config(background, foreground, accent, textPercent, order, hideTileBackground);
         }
     }
 
@@ -196,8 +199,8 @@ final class ReorderedCockpit extends FrameLayout {
             setOrientation(VERTICAL);
             setGravity(Gravity.CENTER_VERTICAL);
             background = new GradientDrawable();
-            background.setColor(Color.argb(70, Color.red(config.accent), Color.green(config.accent),
-                Color.blue(config.accent)));
+            background.setColor(config.hideTileBackground ? Color.TRANSPARENT
+                : Color.argb(70, Color.red(config.accent), Color.green(config.accent), Color.blue(config.accent)));
             setBackground(background);
             label = newText(config.foreground);
             value = newText(config.foreground);

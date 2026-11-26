@@ -43,7 +43,9 @@ internal data class BridgeDisplayOptions(
     val customOrder: Boolean = false,
     val readingOrder: List<CockpitReading> = defaultReadingOrder,
     val restrictedTripleTap: Boolean = false,
-    val keepPageOnResize: Boolean = false
+    val keepPageOnResize: Boolean = false,
+    val hideCockpitTileBackground: Boolean = false,
+    val cockpitTitle: String = ""
 ) {
     fun shows(reading: CockpitReading) = !reading.hiddenIn(hiddenReadings)
 
@@ -164,7 +166,8 @@ internal class BridgeRepository(private val context: Context) {
 
             progress(PatchStage.Patch)
             val helperDex = if (display.hideStatusBar || display.holdSettings || display.customOrder
-                    || display.tripleTapEnabled || OnlineOption.Updates !in profile.blocked) {
+                    || display.tripleTapEnabled || display.cockpitTitle.isNotBlank()
+                    || OnlineOption.Updates !in profile.blocked) {
                 context.assets.open("clone-status/classes.dex").use { it.readBytes() }
             } else null
             val colors = profile.palette.colors
@@ -174,13 +177,16 @@ internal class BridgeRepository(private val context: Context) {
             val grid = if (display.customOrder) {
                 BridgeNeonBuild.CockpitGrid(display.visibleOrderedReadings.toTypedArray(),
                     colors?.get(0) ?: 0xff0b1218.toInt(), colors?.get(1) ?: 0xffedf2f5.toInt(),
-                    colors?.get(2) ?: 0xffee405e.toInt())
+                    colors?.get(2) ?: 0xffee405e.toInt(), display.hideCockpitTileBackground)
             } else null
+            val title = display.cockpitTitle.trim().takeIf { it.isNotEmpty() }?.let {
+                BridgeNeonBuild.CockpitTitle(it, colors?.get(1) ?: 0xffedf2f5.toInt())
+            }
             val colorInstructions = BridgeNeonBuild.patch(original.toPath(), unsigned.toPath(),
                 replacements, helperDex, display.hideStatusBar, display.compactNavigation, display.hideReadingsPopup,
                 profile.onlineMask, display.cockpitText.percent, display.hiddenReadings, display.escFirst,
                 display.holdSettings, grid, display.tripleTapEnabled, display.keepPageOnResize,
-                profile.encode().toByteArray(Charsets.UTF_8))
+                profile.encode().toByteArray(Charsets.UTF_8), title)
 
             progress(PatchStage.Sign)
             try {

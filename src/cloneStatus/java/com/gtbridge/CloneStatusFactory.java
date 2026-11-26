@@ -28,6 +28,8 @@ public final class CloneStatusFactory extends CoreComponentFactory {
     private static final int CUSTOM_GRID = 4;
     private static final int RESTRICTED_TRIPLE_TAP = 8;
     private static final int MOD_UPDATES = 16;
+    private static final int CUSTOM_TITLE = 32;
+    private static final int HIDE_TILE_BACKGROUND = 64;
 
     @Override
     public Application instantiateApplication(ClassLoader loader, String className)
@@ -41,9 +43,11 @@ public final class CloneStatusFactory extends CoreComponentFactory {
         private final Set<View> watched = Collections.newSetFromMap(new WeakHashMap<>());
         private final Set<View> instrumentViews = Collections.newSetFromMap(new WeakHashMap<>());
         private final Set<View> gridAttempts = Collections.newSetFromMap(new WeakHashMap<>());
+        private final Set<View> titledInstruments = Collections.newSetFromMap(new WeakHashMap<>());
         private int options;
         private boolean optionsLoaded;
         private ReorderedCockpit.Config grid;
+        private CockpitTitleView.Config title;
         private final CloneUpdateNotice updates = new CloneUpdateNotice();
 
         @Override
@@ -54,7 +58,10 @@ public final class CloneStatusFactory extends CoreComponentFactory {
                     int flags = stream.read();
                     if (flags >= 0) {
                         options = flags;
-                        if ((options & CUSTOM_GRID) != 0) grid = ReorderedCockpit.Config.read(stream);
+                        if ((options & CUSTOM_GRID) != 0) {
+                            grid = ReorderedCockpit.Config.read(stream, (options & HIDE_TILE_BACKGROUND) != 0);
+                        }
+                        if ((options & CUSTOM_TITLE) != 0) title = CockpitTitleView.Config.read(stream);
                     }
                 } catch (IOException unavailable) {
                     android.util.Log.w("BridgeModding", "Cockpit options unavailable", unavailable);
@@ -71,7 +78,7 @@ public final class CloneStatusFactory extends CoreComponentFactory {
                         if (focused) hideStatusBar(window);
                     });
                 }
-                if (grid != null || (options & (HOLD_SETTINGS | RESTRICTED_TRIPLE_TAP)) != 0) {
+                if (grid != null || title != null || (options & (HOLD_SETTINGS | RESTRICTED_TRIPLE_TAP)) != 0) {
                     decor.getViewTreeObserver().addOnGlobalLayoutListener(() -> installCockpitOptions(activity, decor));
                 }
             }
@@ -89,6 +96,9 @@ public final class CloneStatusFactory extends CoreComponentFactory {
             View instrument = cockpit.findViewWithTag("cockpitInstrument030");
             if (instrument == null || !(instrument.getParent() instanceof FrameLayout)) return;
             FrameLayout frame = (FrameLayout) instrument.getParent();
+            if (title != null && titledInstruments.add(instrument)) {
+                frame.addView(new CockpitTitleView(instrument, title), 1, new FrameLayout.LayoutParams(-1, -1));
+            }
             if (grid != null && gridAttempts.add(instrument)) {
                 View trip = cockpit.findViewWithTag("cockpitTripReset");
                 try {
