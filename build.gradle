@@ -1,0 +1,104 @@
+plugins {
+    id 'com.android.application' version '8.7.3'
+    id 'org.jetbrains.kotlin.android' version '2.1.21'
+    id 'org.jetbrains.kotlin.plugin.compose' version '2.1.21'
+}
+
+android {
+    namespace 'com.gtbridge.neonpatcher'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'com.gtbridge.neonpatcher'
+        minSdk 33
+        targetSdk 35
+        versionCode 13
+        versionName '0.13'
+    }
+
+    signingConfigs {
+        debug {
+            if (providers.gradleProperty('bridgeSigningStore').isPresent()) {
+                storeFile file(providers.gradleProperty('bridgeSigningStore').get())
+            }
+        }
+    }
+
+    buildFeatures {
+        compose true
+        buildConfig true
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    def bin = new File(System.getProperty('java.home'), 'bin')
+    def windowsJavac = new File(bin, 'javac.exe')
+    options.fork = true
+    options.forkOptions.executable = (windowsJavac.isFile() ? windowsJavac : new File(bin, 'javac')).path
+}
+
+def sdkRoot = android.sdkDirectory
+def buildTools = new File(sdkRoot, 'build-tools/36.0.0/lib')
+def apkSignerJar = new File(buildTools, 'apksigner.jar')
+def androidJar = new File(sdkRoot, 'platforms/android-35/android.jar')
+def cloneStatusCore = configurations.create('cloneStatusCore') { transitive = false }
+def cloneStatusBuild = layout.buildDirectory.dir('cloneStatus')
+def cloneStatusAssets = layout.buildDirectory.dir('generated/cloneStatus/assets')
+
+dependencies {
+    implementation platform('androidx.compose:compose-bom:2024.10.01')
+    implementation 'androidx.compose.material3:material3:1.3.1'
+    implementation 'androidx.activity:activity-compose:1.9.3'
+    implementation 'androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7'
+    implementation 'androidx.lifecycle:lifecycle-runtime-compose:2.8.7'
+    implementation files(apkSignerJar)
+    add('cloneStatusCore', 'androidx.core:core:1.13.1@aar')
+}
+
+def extractCloneStatusCore = tasks.register('extractCloneStatusCore', Copy) {
+    from { zipTree(cloneStatusCore.singleFile) }
+    include 'classes.jar'
+    into cloneStatusBuild.map { it.dir('core') }
+}
+
+def compileCloneStatus = tasks.register('compileCloneStatus', JavaCompile) {
+    dependsOn extractCloneStatusCore
+    source = files(fileTree('src/cloneStatus/java') { include '**/*.java' },
+        'src/main/java/com/gtbridge/neonpatcher/CockpitReading.java')
+    classpath = files(androidJar, cloneStatusBuild.map { it.file('core/classes.jar') })
+    destinationDirectory = cloneStatusBuild.map { it.dir('classes') }
+    options.release = 8
+}
+
+def dexCloneStatus = tasks.register('dexCloneStatus', JavaExec) {
+    dependsOn compileCloneStatus
+    classpath = files(new File(buildTools, 'd8.jar'))
+    mainClass = 'com.android.tools.r8.D8'
+    inputs.dir compileCloneStatus.flatMap { it.destinationDirectory }
+    inputs.file cloneStatusBuild.map { it.file('core/classes.jar') }
+    inputs.file androidJar
+    outputs.file cloneStatusAssets.map { it.file('clone-status/classes.dex') }
+    doFirst {
+        def output = cloneStatusAssets.get().dir('clone-status').asFile
+        output.mkdirs()
+        args '--min-api', '28', '--lib', androidJar.path,
+            '--classpath', cloneStatusBuild.get().file('core/classes.jar').asFile.path,
+            '--output', output.path
+        args fileTree(compileCloneStatus.get().destinationDirectory.get().asFile)
+            .matching { include '**/*.class' }.files.sort()
+    }
+}
+
+android.sourceSets.main.assets.srcDir cloneStatusAssets
+tasks.named('preBuild') { dependsOn dexCloneStatus }
