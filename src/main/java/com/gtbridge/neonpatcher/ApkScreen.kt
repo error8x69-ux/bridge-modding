@@ -47,6 +47,8 @@ internal data class ApkActions(
     val blockAnalyticsAndRanking: () -> Unit,
     val patch: () -> Unit,
     val updateClone: () -> Unit,
+    val checkCloneUpdate: () -> Unit,
+    val installPublishedCloneUpdate: () -> Unit,
     val acceptLegacyUpdate: () -> Unit,
     val dismissLegacyUpdate: () -> Unit,
     val install: () -> Unit,
@@ -89,6 +91,33 @@ internal fun ApkScreen(state: PatchState, actions: ApkActions, modifier: Modifie
                 LinearProgressIndicator(Modifier.fillMaxWidth())
             }
             state.updateMessage?.let { StatusMessage(it) }
+        }
+        if (state.installed != null) {
+            Panel {
+                Text("GT Mod Bridge aktualisieren", style = MaterialTheme.typography.titleMedium)
+                VersionRow("Installierte Version", state.installed.label)
+                val release = state.cloneUpdate
+                if (release != null) {
+                    VersionRow("Update verfügbar", BridgeVersion(release.name, release.code).label)
+                    FilledTonalButton(actions.installPublishedCloneUpdate, enabled = idle,
+                        modifier = Modifier.fillMaxWidth()) { Text("Laden und Mods übernehmen") }
+                } else {
+                    if (state.cloneUpdateChecked) {
+                        Text("Für deine Kopie ist kein neueres Original-Update verfügbar.",
+                            style = MaterialTheme.typography.bodySmall)
+                    }
+                    OutlinedButton(actions.checkCloneUpdate, enabled = idle, modifier = Modifier.fillMaxWidth()) {
+                        Text("Nach Original-Updates suchen")
+                    }
+                }
+                state.stage?.takeIf {
+                    it == PatchStage.CheckOriginalUpdate || it == PatchStage.DownloadOriginalUpdate
+                }?.let {
+                    Text(it.title, style = MaterialTheme.typography.bodySmall)
+                    LinearProgressIndicator(Modifier.fillMaxWidth())
+                }
+                state.cloneUpdateMessage?.let { StatusMessage(it) }
+            }
         }
         Panel {
             Text("Original", style = MaterialTheme.typography.titleMedium)
@@ -141,6 +170,11 @@ internal fun ApkScreen(state: PatchState, actions: ApkActions, modifier: Modifie
             }
             OnlineOption.entries.forEach { option ->
                 DisplaySwitch(option.label, option in state.blocked, idle) { actions.changeOnline(option, it) }
+                if (option == OnlineOption.Updates) {
+                    Text("Ohne Sperre meldet die Kopie neue Original-Versionen beim Öffnen. " +
+                        "Updates übernehmen deine Mods über Bridge Modding.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
         }
         Panel {
@@ -163,7 +197,8 @@ internal fun ApkScreen(state: PatchState, actions: ApkActions, modifier: Modifie
             Spacer(Modifier.width(8.dp))
             Text("APK erstellen", Modifier.padding(vertical = 6.dp))
         }
-        state.stage?.takeUnless { it == PatchStage.CheckUpdate || it == PatchStage.DownloadUpdate }?.let { stage ->
+        state.stage?.takeUnless { it == PatchStage.CheckUpdate || it == PatchStage.DownloadUpdate ||
+            it == PatchStage.CheckOriginalUpdate || it == PatchStage.DownloadOriginalUpdate }?.let { stage ->
             Panel(Modifier.semantics { liveRegion = LiveRegionMode.Polite }) {
                 Text(stage.title, style = MaterialTheme.typography.titleMedium)
                 LinearProgressIndicator(Modifier.fillMaxWidth())

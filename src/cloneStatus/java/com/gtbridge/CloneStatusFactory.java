@@ -27,6 +27,7 @@ public final class CloneStatusFactory extends CoreComponentFactory {
     private static final int HOLD_SETTINGS = 2;
     private static final int CUSTOM_GRID = 4;
     private static final int RESTRICTED_TRIPLE_TAP = 8;
+    private static final int MOD_UPDATES = 16;
 
     @Override
     public Application instantiateApplication(ClassLoader loader, String className)
@@ -43,6 +44,7 @@ public final class CloneStatusFactory extends CoreComponentFactory {
         private int options;
         private boolean optionsLoaded;
         private ReorderedCockpit.Config grid;
+        private final CloneUpdateNotice updates = new CloneUpdateNotice();
 
         @Override
         public void onActivityResumed(Activity activity) {
@@ -58,7 +60,8 @@ public final class CloneStatusFactory extends CoreComponentFactory {
                     android.util.Log.w("BridgeModding", "Cockpit options unavailable", unavailable);
                 }
             }
-            if (options == 0) return;
+            if ((options & MOD_UPDATES) != 0) updates.resume(activity);
+            if ((options & ~MOD_UPDATES) == 0) return;
             Window window = activity.getWindow();
             View decor = window.getDecorView();
             boolean hideStatus = (options & HIDE_STATUS_BAR) != 0;
@@ -143,7 +146,7 @@ public final class CloneStatusFactory extends CoreComponentFactory {
 
         @Override public void onActivityCreated(Activity activity, Bundle state) {}
         @Override public void onActivityStarted(Activity activity) {}
-        @Override public void onActivityPaused(Activity activity) {}
+        @Override public void onActivityPaused(Activity activity) { updates.pause(activity); }
         @Override public void onActivityStopped(Activity activity) {}
         @Override public void onActivitySaveInstanceState(Activity activity, Bundle state) {}
         @Override public void onActivityDestroyed(Activity activity) {}

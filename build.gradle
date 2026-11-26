@@ -12,8 +12,8 @@ android {
         applicationId 'com.gtbridge.neonpatcher'
         minSdk 33
         targetSdk 35
-        versionCode 17
-        versionName '0.17'
+        versionCode 18
+        versionName '0.18'
     }
 
     signingConfigs {
@@ -76,6 +76,7 @@ def extractCloneStatusCore = tasks.register('extractCloneStatusCore', Copy) {
 def compileCloneStatus = tasks.register('compileCloneStatus', JavaCompile) {
     dependsOn extractCloneStatusCore
     source = files(fileTree('src/cloneStatus/java') { include '**/*.java' },
+        fileTree('src/shared/java') { include '**/*.java' },
         'src/main/java/com/gtbridge/neonpatcher/CockpitReading.java')
     classpath = files(androidJar, cloneStatusBuild.map { it.file('core/classes.jar') })
     destinationDirectory = cloneStatusBuild.map { it.dir('classes') }
@@ -102,4 +103,5 @@ def dexCloneStatus = tasks.register('dexCloneStatus', JavaExec) {
 }
 
 android.sourceSets.main.assets.srcDir cloneStatusAssets
+android.sourceSets.main.java.srcDir 'src/shared/java'
 tasks.named('preBuild') { dependsOn dexCloneStatus }

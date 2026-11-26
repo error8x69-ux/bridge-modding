@@ -30,6 +30,7 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -52,7 +53,9 @@ internal fun BridgeApp(
     state: PatchState,
     choosePreset: (PalettePreset) -> Unit,
     changeColor: (ColorRole, String) -> Unit,
-    actions: ApkActions
+    actions: ApkActions,
+    openCloneUpdates: Boolean,
+    consumeCloneUpdateNavigation: () -> Unit
 ) {
     state.pendingImport?.let {
         ProfileImportDialog(it, state.stage == null, actions.acceptImport, actions.dismissImport)
@@ -69,6 +72,12 @@ internal fun BridgeApp(
         )
     }
     var section by rememberSaveable { mutableStateOf(Section.Design) }
+    LaunchedEffect(openCloneUpdates) {
+        if (openCloneUpdates) {
+            section = Section.Apk
+            consumeCloneUpdateNavigation()
+        }
+    }
     val screenState = rememberSaveableStateHolder()
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth >= 720.dp

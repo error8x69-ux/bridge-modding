@@ -53,7 +53,7 @@ final class BridgeNeonBuild {
 
     public static void main(String[] args) throws Exception {
         int patched = patch(Path.of(args[0]), Path.of(args[1]),
-                            palette(0xff000000, 0xffff0046, 0xff00ffff));
+                            palette(0xff000000, 0xffff0046, 0xffff0046));
         System.out.println("Patched DEX theme instructions: " + patched);
     }
 
@@ -72,13 +72,15 @@ final class BridgeNeonBuild {
         int manifestCount = 0;
         int labelCount = 0;
         int dexNumber = 0;
+        boolean modUpdates = appliedProfile != null && (onlineMask & 1) == 0;
+        int nativeOnlineMask = modUpdates ? onlineMask | 1 : onlineMask;
         var display = new BridgeNeonDex.DisplayPatch(hideStatusBar, compactNavigation, hideReadingsPopup || holdSettings,
-            onlineMask, cockpitTextPercent, hiddenReadings, escFirst && grid == null, holdSettings, grid != null,
+            nativeOnlineMask, cockpitTextPercent, hiddenReadings, escFirst && grid == null, holdSettings, grid != null,
             restrictedTripleTap, keepPageOnResize);
         if (restrictedTripleTap && !display.hideReadingsPopup) {
             throw new IOException("Der Dreifachtipp setzt den Tippschutz voraus.");
         }
-        if ((helperDex != null) != (hideStatusBar || holdSettings || grid != null || restrictedTripleTap)) {
+        if ((helperDex != null) != (hideStatusBar || holdSettings || grid != null || restrictedTripleTap || modUpdates)) {
             throw new IOException("Cockpit-App-Komponente fehlt oder wurde unerwartet übergeben.");
         }
         try (var input = new ZipFile(source.toFile());
@@ -144,7 +146,8 @@ final class BridgeNeonBuild {
                 writeEntry(zip, counter, helper, helperDex);
                 var options = new ZipEntry(HELPER_OPTIONS);
                 options.setMethod(ZipEntry.STORED);
-                int flags = (hideStatusBar ? 1 : 0) | (holdSettings ? 2 : 0) | (restrictedTripleTap ? 8 : 0);
+                int flags = (hideStatusBar ? 1 : 0) | (holdSettings ? 2 : 0) | (restrictedTripleTap ? 8 : 0)
+                    | (modUpdates ? 16 : 0);
                 writeEntry(zip, counter, options, encodeHelperOptions(flags, grid, cockpitTextPercent));
             }
         }

@@ -13,11 +13,15 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.gtbridge.OriginalBridgeUpdates
 
 class PatcherActivity : ComponentActivity() {
     private val model: PatchViewModel by viewModels()
     private var updating = false
+    private var openCloneUpdates by mutableStateOf(false)
     private val chooseFile = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let(model::selectDocument)
     }
@@ -54,6 +58,7 @@ class PatcherActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         updating = savedInstanceState?.getBoolean("updating", false) ?: false
+        if (savedInstanceState == null) handleUpdateIntent(intent)
         enableEdgeToEdge(SystemBarStyle.dark(android.graphics.Color.BLACK),
             SystemBarStyle.dark(android.graphics.Color.BLACK))
         setContent {
@@ -74,6 +79,8 @@ class PatcherActivity : ComponentActivity() {
                         blockAnalyticsAndRanking = model::blockAnalyticsAndRanking,
                         patch = model::patch,
                         updateClone = model::updateClone,
+                        checkCloneUpdate = model::checkForCloneUpdate,
+                        installPublishedCloneUpdate = model::installPublishedCloneUpdate,
                         acceptLegacyUpdate = model::acceptLegacyUpdate,
                         dismissLegacyUpdate = model::dismissLegacyUpdate,
                         install = { installApk(false) },
@@ -86,9 +93,20 @@ class PatcherActivity : ComponentActivity() {
                         exportProfile = { saveProfile.launch("Bridge-Modding-Einstellungen.json") },
                         acceptImport = model::acceptImport,
                         dismissImport = model::dismissImport
-                    ))
+                    ), openCloneUpdates, { openCloneUpdates = false })
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleUpdateIntent(intent)
+    }
+
+    private fun handleUpdateIntent(intent: Intent) {
+        if (intent.action != OriginalBridgeUpdates.OPEN_UPDATE) return
+        openCloneUpdates = true
+        model.checkForCloneUpdate()
     }
 
     override fun onResume() {

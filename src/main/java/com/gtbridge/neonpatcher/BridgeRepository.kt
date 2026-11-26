@@ -10,6 +10,7 @@ import android.provider.OpenableColumns
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import com.android.apksig.ApkSigner
+import com.gtbridge.OriginalBridgeUpdates
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files
@@ -24,6 +25,7 @@ import java.security.cert.X509Certificate
 internal sealed interface BridgeSource {
     data object Installed : BridgeSource
     data class Document(val uri: Uri, val name: String) : BridgeSource
+    data class Published(val release: OriginalBridgeUpdates.Release) : BridgeSource
 }
 
 internal data class BridgeVersion(val name: String, val code: Long) {
@@ -72,6 +74,8 @@ internal enum class PatchStage(val title: String) {
     ImportProfile("Patch-Einstellungen werden gelesen"),
     CheckUpdate("Bridge-Modding-Updates werden gesucht"),
     DownloadUpdate("Bridge-Modding-Update wird geladen und geprüft"),
+    CheckOriginalUpdate("GT-Mod-Bridge-Updates werden gesucht"),
+    DownloadOriginalUpdate("Original-Update wird geladen und geprüft"),
     ExportProfile("Patch-Einstellungen werden gespeichert")
 }
 
@@ -144,15 +148,23 @@ internal class BridgeRepository(private val context: Context) {
                     }
                     input
                 }
+                is BridgeSource.Published -> {
+                    progress(PatchStage.DownloadOriginalUpdate)
+                    OriginalBridgeUpdates.download(source.release, input)
+                    input
+                }
             }
             val origin = checkOriginal(archive(original, signatureFlags))
+            if (source is BridgeSource.Published && origin.longVersionCode != source.release.code) {
+                throw IOException("Der Versionscode der Original-APK stimmt nicht mit der Update-Quelle überein.")
+            }
             if (replacedClone != null && origin.longVersionCode <= replacedClone.longVersionCode) {
                 throw IOException("Wähle eine Original-APK, die neuer als die installierte GT Mod Bridge ist.")
             }
 
             progress(PatchStage.Patch)
             val helperDex = if (display.hideStatusBar || display.holdSettings || display.customOrder
-                    || display.tripleTapEnabled) {
+                    || display.tripleTapEnabled || OnlineOption.Updates !in profile.blocked) {
                 context.assets.open("clone-status/classes.dex").use { it.readBytes() }
             } else null
             val colors = profile.palette.colors
@@ -261,7 +273,7 @@ internal class BridgeRepository(private val context: Context) {
         if (info?.packageName != BridgeNeonBuild.ORIGINAL || certificate == null) {
             throw IOException("Wähle die vollständige Original-APK der GT VESC Bridge aus.")
         }
-        val expected = OFFICIAL_CERT.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+        val expected = OriginalBridgeUpdates.CERTIFICATE.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
         val actual = MessageDigest.getInstance("SHA-256").digest(certificate.toByteArray())
         if (!MessageDigest.isEqual(expected, actual)) throw IOException("Die Original-APK ist anders signiert.")
         return info
@@ -273,8 +285,6 @@ internal class BridgeRepository(private val context: Context) {
         const val UPDATE_FILE = "Bridge-Modding-Update.apk"
         const val CLONE = BridgeNeonBuild.CLONE
         private const val KEY_ALIAS = "bridge-clone-v1"
-        private const val OFFICIAL_CERT =
-            "d6a08b2b9b7103e99b2938d1fa8359c3aa0c331d2f396c6f58d6601026d19dc1"
 
         @Synchronized
         private fun sign(input: File, output: File) {

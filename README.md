@@ -8,6 +8,8 @@ Lade die signierte APK aus den [GitHub Releases](https://github.com/error8x69-ux
 
 Stabile Releases verwenden Tags wie `v0.13` und ein APK-Asset wie `Bridge-Modding-0.13.apk`. Jedes Update braucht einen höheren Android-Versionscode und denselben Signaturschlüssel.
 
+Ab 0.18 erstellte GT-Mod-Bridge-Kopien können beim Öffnen auf neuere Versionen der GT VESC Bridge hinweisen. Der Hinweis führt in den APK-Tab von Bridge Modding. Dort kannst du das offizielle Update laden, mit dem in deiner Kopie gespeicherten Mod-Profil neu bauen und über Android installieren. Die Original-APK wird vor dem Patchen auf Prüfsumme, Version und Herstellerzertifikat geprüft. Mit „Update-Prüfung blockieren“ kannst du den Hinweis in der Kopie abschalten. Die manuelle Suche im APK-Tab bleibt verfügbar.
+
 Die Android-Oberfläche nutzt Kotlin, Jetpack Compose und Material 3. Der Java-Patchkern wird von der APK-Verarbeitung aufgerufen und kann auch direkt auf dem Desktop geprüft werden.
 
 ## Build

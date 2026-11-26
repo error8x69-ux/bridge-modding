@@ -4,6 +4,7 @@ import android.app.Application
 import android.graphics.Color
 import android.net.Uri
 import android.util.Log
+import com.gtbridge.OriginalBridgeUpdates
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import java.util.Locale
@@ -45,7 +46,7 @@ internal data class BridgePalette(
 
 internal enum class PalettePreset(val label: String, val palette: BridgePalette) {
     Standard("Standard", BridgePalette("#0B1218", "#EDF2F6", "#EE405E", original = true)),
-    OledPink("OLED Pink", BridgePalette("#000000", "#FF0046", "#00FFFF")),
+    OledPink("OLED Pink", BridgePalette("#000000", "#FF0046", "#FF0046")),
     OledGt2("OLED GT2", BridgePalette("#000000", "#39FF14", "#39FF14")),
     Ice("Eisblau", BridgePalette("#08111C", "#E3F7FF", "#55C8FF")),
     Violet("Violett", BridgePalette("#140D1D", "#E7C8FF", "#FF91E0")),
@@ -73,6 +74,9 @@ internal data class PatchState(
     val pendingImport: BridgeProfile? = null,
     val pendingLegacyUpdate: CloneUpdateRequest? = null,
     val installCloneRequest: Boolean = false,
+    val cloneUpdate: OriginalBridgeUpdates.Release? = null,
+    val cloneUpdateChecked: Boolean = false,
+    val cloneUpdateMessage: PatchMessage? = null,
     val update: BridgeRelease? = null,
     val preparedUpdate: BridgeVersion? = null,
     val updateChecked: Boolean = false,
@@ -126,6 +130,24 @@ internal class PatchViewModel(application: Application) : AndroidViewModel(appli
         }
     }
 
+    fun checkForCloneUpdate() {
+        launchWork(PatchStage.CheckOriginalUpdate, cloneUpdate = true) {
+            val (installed, release) = withContext(Dispatchers.IO) {
+                repository.installedVersion(BridgeRepository.CLONE) to OriginalBridgeUpdates.latest()
+            }
+            model.update { state ->
+                state.copy(installed = installed, cloneUpdateChecked = true,
+                    cloneUpdate = release?.takeIf { installed != null && it.code > installed.code })
+            }
+        }
+    }
+
+    fun installPublishedCloneUpdate() {
+        val snapshot = model.value
+        val release = snapshot.cloneUpdate ?: return
+        buildCloneUpdate(CloneUpdateRequest(BridgeSource.Published(release), snapshot.profile), false)
+    }
+
     fun choosePreset(preset: PalettePreset) = changePalette(preset.palette)
 
     fun changeColor(role: ColorRole, hex: String) =
@@ -175,6 +197,11 @@ internal class PatchViewModel(application: Application) : AndroidViewModel(appli
             oldValue?.let(::normalizedHex)?.let { palette.with(role, it) } ?: palette
         }
         val gt2 = PalettePreset.OledGt2.palette
+        val pink = PalettePreset.OledPink.palette
+        if (saved == pink.with(ColorRole.Accent, "#00FFFF")) {
+            preferences.edit().putString("color${ColorRole.Accent.ordinal}", pink.accent).apply()
+            return pink
+        }
         if (saved == gt2.with(ColorRole.Accent, "#FF0046")) {
             preferences.edit().putString("color${ColorRole.Accent.ordinal}", gt2.accent).apply()
             return gt2
@@ -190,6 +217,7 @@ internal class PatchViewModel(application: Application) : AndroidViewModel(appli
             }
             model.update {
                 it.copy(original = original, installed = installed,
+                    cloneUpdate = it.cloneUpdate?.takeIf { release -> installed != null && release.code > installed.code },
                     output = if (it.stage == null) output else it.output)
             }
         }
@@ -243,7 +271,7 @@ internal class PatchViewModel(application: Application) : AndroidViewModel(appli
     fun consumeCloneInstallRequest() = model.update { it.copy(installCloneRequest = false) }
 
     private fun buildCloneUpdate(request: CloneUpdateRequest, useCurrentProfile: Boolean) {
-        launchWork(PatchStage.Validate) {
+        launchWork(PatchStage.Validate, cloneUpdate = request.source is BridgeSource.Published) {
             val report = try {
                 withContext(Dispatchers.IO) {
                     repository.updateClone(request.source, request.profile.takeIf { useCurrentProfile }) { stage ->
@@ -297,11 +325,15 @@ internal class PatchViewModel(application: Application) : AndroidViewModel(appli
         model.update { if (update) it.copy(updateMessage = message) else it.copy(message = message) }
     }
 
-    private fun launchWork(stage: PatchStage, action: suspend () -> Unit) {
+    private fun launchWork(stage: PatchStage, cloneUpdate: Boolean = false, action: suspend () -> Unit) {
         if (model.value.stage != null) return
         val update = stage == PatchStage.CheckUpdate || stage == PatchStage.DownloadUpdate
         model.update { state ->
-            if (update) state.copy(stage = stage, updateMessage = null) else state.copy(stage = stage, message = null)
+            when {
+                cloneUpdate -> state.copy(stage = stage, cloneUpdateMessage = null, message = null)
+                update -> state.copy(stage = stage, updateMessage = null)
+                else -> state.copy(stage = stage, message = null)
+            }
         }
         viewModelScope.launch {
             try {
@@ -309,17 +341,22 @@ internal class PatchViewModel(application: Application) : AndroidViewModel(appli
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: Exception) {
-                report(failure, update)
+                report(failure, update, cloneUpdate)
             } catch (failure: LinkageError) {
-                report(failure, update)
+                report(failure, update, cloneUpdate)
             } finally {
                 model.update { it.copy(stage = null) }
             }
         }
     }
 
-    private fun report(failure: Throwable, update: Boolean = false) {
+    private fun report(failure: Throwable, update: Boolean = false, cloneUpdate: Boolean = false) {
         Log.e("BridgeModding", "Aktion fehlgeschlagen", failure)
-        notify(failure.localizedMessage ?: "Die Aktion ist fehlgeschlagen.", MessageType.Error, update)
+        val message = failure.localizedMessage ?: "Die Aktion ist fehlgeschlagen."
+        if (cloneUpdate) {
+            model.update { it.copy(cloneUpdateMessage = PatchMessage(message, MessageType.Error)) }
+        } else {
+            notify(message, MessageType.Error, update)
+        }
     }
 }
