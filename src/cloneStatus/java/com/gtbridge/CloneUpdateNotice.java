@@ -31,9 +31,10 @@ final class CloneUpdateNotice {
     private AlertDialog manualDialog;
     private OriginalBridgeUpdates.Release pending;
     private boolean checking;
+    private boolean showChangelog;
     private long nextAttempt;
 
-    void resume(Activity activity) {
+    void resume(Activity activity, boolean showChangelog) {
         if (!"de.smartrepair.smartbridge.MainActivity".equals(activity.getClass().getName())) return;
         PackageInfo info;
         try {
@@ -42,6 +43,7 @@ final class CloneUpdateNotice {
             return;
         }
         foreground = activity;
+        this.showChangelog = showChangelog;
         watchVersionLink(activity, info);
         if (demoActive(activity)) return;
         showPending();
@@ -111,7 +113,10 @@ final class CloneUpdateNotice {
                 checking = false;
                 preferences.edit().putLong("checkedAt", System.currentTimeMillis()).putLong("checkedBuild", code).apply();
                 pending = release != null && release.code > code ? release : null;
-                finishManualCheck(pending == null ? "Du hast bereits die aktuelle Version." : null);
+                finishManualCheck(pending == null
+                    ? withChangelog("Du hast bereits die aktuelle Version.", release != null && release.code == code
+                        ? release : null)
+                    : null);
                 showPending();
             });
         }, "bridge-modding-update").start();
@@ -153,7 +158,8 @@ final class CloneUpdateNotice {
         }
         dialog = new AlertDialog.Builder(activity)
             .setTitle("Update für GT Mod Bridge")
-            .setMessage("Version " + release.name + " ist verfügbar. Bridge Modding übernimmt deine bisherigen Mods.")
+            .setMessage(withChangelog(
+                "Version " + release.name + " ist verfügbar. Bridge Modding übernimmt deine bisherigen Mods.", release))
             .setPositiveButton("Mit Mods aktualisieren", (notice, button) -> {
                 pending = null;
                 try {
@@ -173,6 +179,12 @@ final class CloneUpdateNotice {
             showPending();
         });
         dialog.show();
+    }
+
+    private String withChangelog(String message, OriginalBridgeUpdates.Release release) {
+        return showChangelog && release != null && !release.changelog.isEmpty()
+            ? message + "\n\nWas ist neu in " + release.name + "?\n" + release.changelog
+            : message;
     }
 
     private static boolean demoActive(Activity activity) {

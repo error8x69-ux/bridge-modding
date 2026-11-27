@@ -10,13 +10,19 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalButton
@@ -31,12 +37,21 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 
 internal data class ApkActions(
@@ -66,6 +81,10 @@ internal data class ApkActions(
 @Composable
 internal fun ApkScreen(state: PatchState, actions: ApkActions, modifier: Modifier = Modifier) {
     val idle = state.stage == null
+    var showChangelogs by rememberSaveable { mutableStateOf(false) }
+    if (showChangelogs) {
+        OriginalChangelogDialog(state, actions.checkCloneUpdate) { showChangelogs = false }
+    }
     Column(
         modifier.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(top = 14.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -92,20 +111,31 @@ internal fun ApkScreen(state: PatchState, actions: ApkActions, modifier: Modifie
             }
             state.updateMessage?.let { StatusMessage(it) }
         }
-        if (state.installed != null) {
-            Panel {
-                Text("GT Mod Bridge aktualisieren", style = MaterialTheme.typography.titleMedium)
+        Panel {
+            Text("Original-Updates", style = MaterialTheme.typography.titleMedium)
+            OutlinedButton(
+                onClick = {
+                    showChangelogs = true
+                    if (idle) actions.checkCloneUpdate()
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("Changelog-Übersicht") }
+            DisplaySwitch("Changelogs im Update-Hinweis anzeigen", state.display.showUpdateChangelog, idle) {
+                actions.changeDisplay(state.display.copy(showUpdateChangelog = it))
+            }
+            if (state.installed != null) {
                 VersionRow("Installierte Version", state.installed.label)
                 val release = state.cloneUpdate
                 if (release != null) {
                     VersionRow("Update verfügbar", BridgeVersion(release.name, release.code).label)
+                } else if (state.cloneUpdateChecked) {
+                    Text("Für deine Kopie ist kein neueres Original-Update verfügbar.",
+                        style = MaterialTheme.typography.bodySmall)
+                }
+                if (release != null) {
                     FilledTonalButton(actions.installPublishedCloneUpdate, enabled = idle,
                         modifier = Modifier.fillMaxWidth()) { Text("Laden und Mods übernehmen") }
                 } else {
-                    if (state.cloneUpdateChecked) {
-                        Text("Für deine Kopie ist kein neueres Original-Update verfügbar.",
-                            style = MaterialTheme.typography.bodySmall)
-                    }
                     OutlinedButton(actions.checkCloneUpdate, enabled = idle, modifier = Modifier.fillMaxWidth()) {
                         Text("Nach Original-Updates suchen")
                     }
@@ -236,6 +266,71 @@ internal fun ApkScreen(state: PatchState, actions: ApkActions, modifier: Modifie
             }
         }
     }
+}
+
+@Composable
+private fun OriginalChangelogDialog(state: PatchState, refresh: () -> Unit, dismiss: () -> Unit) {
+    val loading = state.stage == PatchStage.CheckOriginalUpdate
+    val entries = state.originalChangelogs
+    AlertDialog(
+        onDismissRequest = dismiss,
+        title = { Text("GT VESC Bridge · Changelogs") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
+                state.cloneUpdateMessage?.let { message ->
+                    StatusMessage(message)
+                    if (entries.isNotEmpty()) {
+                        Text("Zuletzt gespeicherte Changelogs.", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+                if (entries.isNotEmpty()) {
+                    var expandedCode by rememberSaveable { mutableStateOf<Long?>(entries.first().version.code) }
+                    LazyColumn(Modifier.heightIn(max = 420.dp)) {
+                        items(entries, key = { it.version.code }) { entry ->
+                            val expanded = expandedCode == entry.version.code
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                            Row(
+                                Modifier.fillMaxWidth().clickable(role = Role.Button) {
+                                    expandedCode = entry.version.code.takeUnless { expanded }
+                                }.padding(vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(entry.version.label, Modifier.weight(1f),
+                                    style = MaterialTheme.typography.titleSmall)
+                                Icon(if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                    contentDescription = if (expanded) "Einklappen" else "Ausklappen")
+                            }
+                            if (expanded) {
+                                SelectionContainer {
+                                    Text(remember(entry.notes) { formatChangelog(entry.notes) },
+                                        Modifier.padding(bottom = 12.dp),
+                                        style = MaterialTheme.typography.bodyMedium)
+                                }
+                            }
+                        }
+                    }
+                } else if (!loading && state.cloneUpdateMessage == null) {
+                    Text(if (state.cloneUpdateChecked) "Der Hersteller-Feed enthält derzeit keine Changelogs."
+                        else "Changelogs vom Hersteller laden.")
+                }
+            }
+        },
+        confirmButton = { TextButton(dismiss) { Text("Schließen") } },
+        dismissButton = { TextButton(refresh, enabled = state.stage == null) { Text("Aktualisieren") } }
+    )
+}
+
+private val boldChangelogText = Regex("""\*\*([^*\r\n]+)\*\*""")
+
+private fun formatChangelog(notes: String) = buildAnnotatedString {
+    var offset = 0
+    for (match in boldChangelogText.findAll(notes)) {
+        append(notes.substring(offset, match.range.first))
+        withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(match.groupValues[1]) }
+        offset = match.range.last + 1
+    }
+    append(notes.substring(offset))
 }
 
 @Composable

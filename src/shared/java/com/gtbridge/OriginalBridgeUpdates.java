@@ -29,13 +29,15 @@ public final class OriginalBridgeUpdates {
     public static final class Release {
         public final long code;
         public final String name;
+        public final String changelog;
         private final URI url;
         private final long size;
         private final String sha256;
 
-        private Release(long code, String name, URI url, long size, String sha256) {
+        private Release(long code, String name, String changelog, URI url, long size, String sha256) {
             this.code = code;
             this.name = name;
+            this.changelog = changelog;
             this.url = url;
             this.size = size;
             this.sha256 = sha256;
@@ -67,7 +69,9 @@ public final class OriginalBridgeUpdates {
                     || !url.getRawPath().matches("/gt_vesc/app/releases/[A-Za-z0-9][A-Za-z0-9_.-]*\\.apk")) {
                 throw new IOException("Die Update-Quelle meldet eine ungültige Original-APK.");
             }
-            return new Release(code, name, url, size, sha256);
+            Object changelog = json.opt("changelog");
+            String notes = changelog instanceof String ? ((String) changelog).trim() : "";
+            return new Release(code, name, notes, url, size, sha256);
         } finally {
             connection.disconnect();
         }

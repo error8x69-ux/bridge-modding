@@ -45,7 +45,8 @@ internal data class BridgeDisplayOptions(
     val restrictedTripleTap: Boolean = false,
     val keepPageOnResize: Boolean = false,
     val hideCockpitTileBackground: Boolean = false,
-    val cockpitTitle: String = ""
+    val cockpitTitle: String = "",
+    val showUpdateChangelog: Boolean = false
 ) {
     fun shows(reading: CockpitReading) = !reading.hiddenIn(hiddenReadings)
 
@@ -186,7 +187,7 @@ internal class BridgeRepository(private val context: Context) {
                 replacements, helperDex, display.hideStatusBar, display.compactNavigation, display.hideReadingsPopup,
                 profile.onlineMask, display.cockpitText.percent, display.hiddenReadings, display.escFirst,
                 display.holdSettings, grid, display.tripleTapEnabled, display.keepPageOnResize,
-                profile.encode().toByteArray(Charsets.UTF_8), title)
+                profile.encode().toByteArray(Charsets.UTF_8), title, display.showUpdateChangelog)
 
             progress(PatchStage.Sign)
             try {

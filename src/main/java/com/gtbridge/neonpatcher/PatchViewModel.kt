@@ -74,7 +74,8 @@ internal data class PatchState(
     val pendingImport: BridgeProfile? = null,
     val pendingLegacyUpdate: CloneUpdateRequest? = null,
     val installCloneRequest: Boolean = false,
-    val cloneUpdate: OriginalBridgeUpdates.Release? = null,
+    val originalRelease: OriginalBridgeUpdates.Release? = null,
+    val originalChangelogs: List<OriginalChangelog> = emptyList(),
     val cloneUpdateChecked: Boolean = false,
     val cloneUpdateMessage: PatchMessage? = null,
     val update: BridgeRelease? = null,
@@ -86,12 +87,15 @@ internal data class PatchState(
 ) {
     val sourceAvailable: Boolean get() = source is BridgeSource.Document || original != null
     val originalNewer: Boolean get() = original != null && installed != null && original.code > installed.code
+    val cloneUpdate: OriginalBridgeUpdates.Release? get() =
+        originalRelease?.takeIf { installed != null && it.code > installed.code }
     val profile: BridgeProfile get() = BridgeProfile(palette, display, blocked)
 }
 
 internal class PatchViewModel(application: Application) : AndroidViewModel(application) {
     val repository = BridgeRepository(application)
     private val updates = BridgeUpdates(application)
+    private val changelogHistory = OriginalChangelogHistory(application)
     private val preferences = application.getSharedPreferences("palette", Application.MODE_PRIVATE)
     private val model = MutableStateFlow(PatchState(loadPalette(), BridgeDisplayOptions(
         hideStatusBar = preferences.getBoolean("hideStatusBar", false),
@@ -110,8 +114,10 @@ internal class PatchViewModel(application: Application) : AndroidViewModel(appli
         restrictedTripleTap = preferences.getBoolean("restrictedTripleTap", false),
         keepPageOnResize = preferences.getBoolean("keepCockpitOnResize", false),
         hideCockpitTileBackground = preferences.getBoolean("hideCockpitTileBackground", false),
-        cockpitTitle = preferences.getString("cockpitTitle", null)?.takeIf(::validCockpitTitle).orEmpty()
-    ), OnlineOption.entries.filterTo(mutableSetOf()) { preferences.getBoolean("block${it.name}", false) }))
+        cockpitTitle = preferences.getString("cockpitTitle", null)?.takeIf(::validCockpitTitle).orEmpty(),
+        showUpdateChangelog = preferences.getBoolean("showUpdateChangelog", false)
+    ), OnlineOption.entries.filterTo(mutableSetOf()) { preferences.getBoolean("block${it.name}", false) },
+        originalChangelogs = changelogHistory.load()))
     val state = model.asStateFlow()
 
     fun checkForUpdate() {
@@ -134,12 +140,19 @@ internal class PatchViewModel(application: Application) : AndroidViewModel(appli
 
     fun checkForCloneUpdate() {
         launchWork(PatchStage.CheckOriginalUpdate, cloneUpdate = true) {
-            val (installed, release) = withContext(Dispatchers.IO) {
-                repository.installedVersion(BridgeRepository.CLONE) to OriginalBridgeUpdates.latest()
+            val savedChangelogs = model.value.originalChangelogs
+            val (installed, release, changelogs) = withContext(Dispatchers.IO) {
+                val installed = repository.installedVersion(BridgeRepository.CLONE)
+                val release = OriginalBridgeUpdates.latest()
+                val changelogs = release?.let {
+                    changelogHistory.merge(savedChangelogs,
+                        parseOriginalChangelogs(BridgeVersion(it.name, it.code), it.changelog))
+                } ?: savedChangelogs
+                Triple(installed, release, changelogs)
             }
             model.update { state ->
-                state.copy(installed = installed, cloneUpdateChecked = true,
-                    cloneUpdate = release?.takeIf { installed != null && it.code > installed.code })
+                state.copy(installed = installed, cloneUpdateChecked = true, originalRelease = release,
+                    originalChangelogs = changelogs)
             }
         }
     }
@@ -186,6 +199,7 @@ internal class PatchViewModel(application: Application) : AndroidViewModel(appli
             putBoolean("customOrder", display.customOrder)
             putBoolean("hideCockpitTileBackground", display.hideCockpitTileBackground)
             putString("cockpitTitle", display.cockpitTitle)
+            putBoolean("showUpdateChangelog", display.showUpdateChangelog)
             putString("readingOrder", display.readingOrder.joinToString(",") { it.name })
             putBoolean("restrictedTripleTap", display.restrictedTripleTap)
             putBoolean("keepCockpitOnResize", display.keepPageOnResize)
@@ -221,7 +235,6 @@ internal class PatchViewModel(application: Application) : AndroidViewModel(appli
             }
             model.update {
                 it.copy(original = original, installed = installed,
-                    cloneUpdate = it.cloneUpdate?.takeIf { release -> installed != null && release.code > installed.code },
                     output = if (it.stage == null) output else it.output)
             }
         }

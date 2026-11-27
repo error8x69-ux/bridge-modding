@@ -30,6 +30,7 @@ public final class CloneStatusFactory extends CoreComponentFactory {
     private static final int MOD_UPDATES = 16;
     private static final int CUSTOM_TITLE = 32;
     private static final int HIDE_TILE_BACKGROUND = 64;
+    private static final int SHOW_UPDATE_CHANGELOG = 128;
 
     @Override
     public Application instantiateApplication(ClassLoader loader, String className)
@@ -67,8 +68,8 @@ public final class CloneStatusFactory extends CoreComponentFactory {
                     android.util.Log.w("BridgeModding", "Cockpit options unavailable", unavailable);
                 }
             }
-            if ((options & MOD_UPDATES) != 0) updates.resume(activity);
-            if ((options & ~MOD_UPDATES) == 0) return;
+            if ((options & MOD_UPDATES) != 0) updates.resume(activity, (options & SHOW_UPDATE_CHANGELOG) != 0);
+            if ((options & ~(MOD_UPDATES | SHOW_UPDATE_CHANGELOG)) == 0) return;
             Window window = activity.getWindow();
             View decor = window.getDecorView();
             boolean hideStatus = (options & HIDE_STATUS_BAR) != 0;

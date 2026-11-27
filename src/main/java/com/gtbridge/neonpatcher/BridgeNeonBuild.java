@@ -58,14 +58,15 @@ final class BridgeNeonBuild {
     }
 
     static int patch(Path source, Path output, Map<Integer, Integer> colors) throws Exception {
-        return patch(source, output, colors, null, false, false, false, 0, 100, 0, false, false, null, false, false, null, null);
+        return patch(source, output, colors, null, false, false, false, 0, 100, 0, false, false, null, false, false,
+            null, null, false);
     }
 
     static int patch(Path source, Path output, Map<Integer, Integer> colors,
                      byte[] helperDex, boolean hideStatusBar, boolean compactNavigation, boolean hideReadingsPopup,
                      int onlineMask, int cockpitTextPercent, int hiddenReadings, boolean escFirst,
                      boolean holdSettings, CockpitGrid grid, boolean restrictedTripleTap, boolean keepPageOnResize,
-                     byte[] appliedProfile, CockpitTitle title)
+                     byte[] appliedProfile, CockpitTitle title, boolean showUpdateChangelog)
             throws Exception {
         int dexColors = 0;
         int themeColors = 0;
@@ -148,7 +149,8 @@ final class BridgeNeonBuild {
                 options.setMethod(ZipEntry.STORED);
                 int flags = (hideStatusBar ? 1 : 0) | (holdSettings ? 2 : 0) | (restrictedTripleTap ? 8 : 0)
                     | (modUpdates ? 16 : 0) | (title != null ? 32 : 0)
-                    | (grid != null && grid.hideTileBackground() ? 64 : 0);
+                    | (grid != null && grid.hideTileBackground() ? 64 : 0)
+                    | (modUpdates && showUpdateChangelog ? 128 : 0);
                 writeEntry(zip, counter, options, encodeHelperOptions(flags, grid, cockpitTextPercent, title));
             }
         }

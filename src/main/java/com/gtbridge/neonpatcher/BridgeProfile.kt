@@ -49,7 +49,12 @@ internal data class BridgeProfile(
         if (display.tripleTapEnabled) add("Dreifachtipp lädt das gedrosselte Profil")
     }
 
-    val summary: List<String> get() = listOf("Palette · $paletteLabel") + cockpitSummary + blocked.map { it.label }
+    val summary: List<String> get() = buildList {
+        add("Palette · $paletteLabel")
+        addAll(cockpitSummary)
+        if (display.showUpdateChangelog) add("Changelogs der Original-App anzeigen")
+        addAll(blocked.map { it.label })
+    }
 
     fun encode(): String = JSONObject()
         .put("format", 1)
@@ -69,6 +74,7 @@ internal data class BridgeProfile(
         .put("customOrder", display.customOrder)
         .put("hideCockpitTileBackground", display.hideCockpitTileBackground)
         .put("cockpitTitle", display.cockpitTitle)
+        .put("showUpdateChangelog", display.showUpdateChangelog)
         .put("readingOrder", display.readingOrder.joinToString(",") { it.name })
         .put("restrictedTripleTap", display.restrictedTripleTap)
         .put("onlineMask", onlineMask)
@@ -100,7 +106,8 @@ internal data class BridgeProfile(
                     if (json.has("readingOrder")) parseReadingOrder(json.getString("readingOrder")) else defaultReadingOrder,
                     json.has("restrictedTripleTap") && flag("restrictedTripleTap"),
                     json.has("keepCockpitOnResize") && flag("keepCockpitOnResize"),
-                    json.has("hideCockpitTileBackground") && flag("hideCockpitTileBackground"), title),
+                    json.has("hideCockpitTileBackground") && flag("hideCockpitTileBackground"), title,
+                    json.has("showUpdateChangelog") && flag("showUpdateChangelog")),
                 OnlineOption.entries.filterTo(mutableSetOf()) { mask and (1 shl it.ordinal) != 0 }
             )
         }
